@@ -75,3 +75,12 @@ go run main.go
     - Exchanges code for access token
 - Application retrieves and displays patient information
 
+## Testing
+
+You can test the application using a FHIR server that supports SMART on FHIR. Ensure you have the necessary credentials and configuration.
+A good EHR Launcher to test with is: o test with is: [SMART Health IT Sandbox](https://launch.smarthealthit.org/). Some of the steps you would need to take are:
+- Create a new EHR client in the sandbox
+- Add the redirect URL
+- Add the client ID and secret
+- Add the scopes
+- Set the same client ID and secret in the application
