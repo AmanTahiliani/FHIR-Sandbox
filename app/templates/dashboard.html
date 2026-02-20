@@ -1,452 +1,384 @@
 {{template "base.html" .}}
 
 {{define "nav"}}
-  <a href="/patients">All Patients</a>
-  <a href="/">Home</a>
+  <a href="/patients" class="nav-link">All Patients</a>
+  <a href="/" class="nav-link">Home</a>
   <form action="/logout" method="POST" style="display:inline">
-    <button class="btn btn-danger" type="submit" style="padding:6px 12px;font-size:.875rem;">Logout</button>
+    <button class="btn btn-danger" type="submit">Logout</button>
   </form>
 {{end}}
 
 {{define "content"}}
 
-{{/* ---- Success Flash Message ---- */}}
+{{/* ---- Flash Messages ---- */}}
 {{if .Synced}}
-<div class="card" style="background-color:#d4edda;border-left:4px solid #28a745;margin-bottom:16px;">
-  <div style="display:flex;align-items:center;justify-content:space-between;">
+<div class="flash-message flash-success">
+  <div class="flex items-center gap-2">
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
     <div>
-      <strong>✓ Sync complete</strong>
-      <span style="font-size:.875rem;color:#555;">Data has been refreshed from the EHR.</span>
+      <strong>Sync complete</strong>
+      <span class="text-sm">Data has been refreshed from the EHR.</span>
     </div>
-    <button onclick="this.parentElement.style.display='none';" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:#666;">&times;</button>
   </div>
+  <button onclick="this.parentElement.style.display='none';" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:inherit;">&times;</button>
 </div>
 {{end}}
 
-{{/* ---- Practitioner block ---- */}}
-{{if .Practitioner}}
-<div class="card">
-  <div class="card-title">Logged-in Clinician</div>
-  <div class="user-header">
-    <div class="avatar avatar-practitioner">
-      {{if .Practitioner.FirstName}}{{slice .Practitioner.FirstName 0 1}}{{end}}{{if .Practitioner.LastName}}{{slice .Practitioner.LastName 0 1}}{{end}}
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+  
+  {{/* ---- Left Column: Patient Context ---- */}}
+  <div class="md:col-span-1">
+    
+    {{/* Practitioner Card */}}
+    {{if .Practitioner}}
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Clinician</h3>
+        <span class="badge badge-neutral">Active Session</span>
+      </div>
+      <div class="flex items-center gap-4 mb-4">
+        <div class="avatar avatar-practitioner">
+          {{if .Practitioner.FirstName}}{{slice .Practitioner.FirstName 0 1}}{{end}}{{if .Practitioner.LastName}}{{slice .Practitioner.LastName 0 1}}{{end}}
+        </div>
+        <div>
+          <h4 class="font-bold">
+            {{if .Practitioner.FirstName}}{{.Practitioner.FirstName}} {{end}}
+            {{if .Practitioner.MiddleName}}{{.Practitioner.MiddleName}} {{end}}
+            {{if .Practitioner.LastName}}{{.Practitioner.LastName}}{{end}}
+          </h4>
+          <span class="text-sm text-muted">
+             {{if eq .Practitioner.Role "practitioner"}}Health Care Practitioner{{else}}Patient{{end}}
+          </span>
+        </div>
+      </div>
     </div>
-    <div class="user-header-info">
-      <h2>
-        {{if .Practitioner.FirstName}}{{.Practitioner.FirstName}} {{end}}
-        {{if .Practitioner.MiddleName}}{{.Practitioner.MiddleName}} {{end}}
-        {{if .Practitioner.LastName}}{{.Practitioner.LastName}}{{end}}
-      </h2>
-      {{if eq .Practitioner.Role "practitioner"}}
-        <span class="badge badge-practitioner">Health Care Practitioner</span>
-      {{else}}
-        <span class="badge badge-patient">Patient (Self-Service)</span>
-      {{end}}
-    </div>
-  </div>
-  <div class="detail-grid">
-    <div class="detail-item">
-      <label>Date of Birth</label>
-      <p>{{formatDate .Practitioner.DOB}}</p>
-    </div>
-    <div class="detail-item">
-      <label>Gender</label>
-      <p>{{titleCase .Practitioner.Gender}}</p>
-    </div>
-    <div class="detail-item">
-      <label>Email</label>
-      <p>{{orDash .Practitioner.Email}}</p>
-    </div>
-    <div class="detail-item">
-      <label>FHIR ID</label>
-      <p class="text-muted">{{.Practitioner.FHIRID}}</p>
-    </div>
-  </div>
-</div>
-{{else}}
-<div class="card">
-  <p class="text-muted">No practitioner context was returned by this EHR. Session not established.</p>
-</div>
-{{end}}
+    {{end}}
 
-{{/* ---- Patient block ---- */}}
-{{if .Patient}}
-<div class="card">
-  <div class="card-title">Active Patient</div>
-  <div class="user-header">
-    <div class="avatar avatar-patient">
-      {{if .Patient.FirstName}}{{slice .Patient.FirstName 0 1}}{{end}}{{if .Patient.LastName}}{{slice .Patient.LastName 0 1}}{{end}}
+    {{/* Patient Card */}}
+    {{if .Patient}}
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Patient</h3>
+        <span class="badge badge-success">Active Context</span>
+      </div>
+      
+      <div class="flex items-center gap-4 mb-4">
+        <div class="avatar avatar-patient">
+          {{if .Patient.FirstName}}{{slice .Patient.FirstName 0 1}}{{end}}{{if .Patient.LastName}}{{slice .Patient.LastName 0 1}}{{end}}
+        </div>
+        <div>
+          <h2 class="font-bold text-lg">
+            {{if .Patient.FirstName}}{{.Patient.FirstName}} {{end}}
+            {{if .Patient.MiddleName}}{{.Patient.MiddleName}} {{end}}
+            {{if .Patient.LastName}}{{.Patient.LastName}}{{end}}
+          </h2>
+          <span class="text-sm text-muted">ID: {{.Patient.FHIRID}}</span>
+        </div>
+      </div>
+      
+      <div class="details-list" style="grid-template-columns: 1fr;">
+        <div class="detail-item">
+          <span class="detail-label">DOB</span>
+          <span class="detail-value">{{formatDate .Patient.DOB}}</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Gender</span>
+          <span class="detail-value">{{titleCase .Patient.Gender}}</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Email</span>
+          <span class="detail-value">{{orDash .Patient.Email}}</span>
+        </div>
+      </div>
     </div>
-    <div class="user-header-info">
-      <h2>
-        {{if .Patient.FirstName}}{{.Patient.FirstName}} {{end}}
-        {{if .Patient.MiddleName}}{{.Patient.MiddleName}} {{end}}
-        {{if .Patient.LastName}}{{.Patient.LastName}}{{end}}
-      </h2>
-      <span class="badge badge-patient">Patient</span>
-    </div>
-  </div>
-  <hr/>
-  <div class="detail-grid">
-    <div class="detail-item">
-      <label>Date of Birth</label>
-      <p>{{formatDate .Patient.DOB}}</p>
-    </div>
-    <div class="detail-item">
-      <label>Gender</label>
-      <p>{{titleCase .Patient.Gender}}</p>
-    </div>
-    <div class="detail-item">
-      <label>Email</label>
-      <p>{{orDash .Patient.Email}}</p>
-    </div>
-    <div class="detail-item">
-      <label>FHIR ID</label>
-      <p class="text-muted">{{.Patient.FHIRID}}</p>
-    </div>
-    <div class="detail-item">
-      <label>EHR Server</label>
-      <p class="text-muted">{{.Patient.EHRURL}}</p>
-    </div>
-    <div class="detail-item">
-      <label>Internal ID</label>
-      <p class="text-muted">{{.Patient.ID}}</p>
-    </div>
-  </div>
-</div>
 
-{{/* ---- High-Criticality Allergy Warning Card ---- */}}
-{{if hasCriticalAllergies .Allergies}}
-<div class="card" style="border-left:4px solid #dc3545;">
-  <div style="display:flex;align-items:flex-start;gap:12px;">
-    <span style="font-size:1.5rem;">⚠</span>
-    <div>
-      <strong style="color:#dc3545;">High-Criticality Allergies Detected</strong>
-      <p style="margin-top:4px;margin-bottom:0;font-size:.875rem;color:#555;">
+    {{/* Alerts Card */}}
+    {{if hasCriticalAllergies .Allergies}}
+    <div class="card" style="border-left: 4px solid var(--danger-color);">
+      <div class="card-header" style="border-bottom:none; padding-bottom:0; margin-bottom:0;">
+        <h3 class="card-title text-danger">Critical Allergies</h3>
+      </div>
+      <div class="mt-4">
         {{range .Allergies}}
           {{if eq .Criticality "high"}}
-            <strong>{{.CodeText}}</strong> ({{.ClinicalStatus}}){{if ne .CodeText (last .Allergies).CodeText}}<br/>{{end}}
+            <div class="flex justify-between items-center mb-2">
+              <span class="font-medium text-danger">{{.CodeText}}</span>
+              <span class="badge badge-danger">High</span>
+            </div>
           {{end}}
         {{end}}
-      </p>
+      </div>
     </div>
-  </div>
-</div>
-{{end}}
+    {{end}}
 
-{{/* ---- Clinical Data block ---- */}}
-<div class="card">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-    <div class="card-title" style="margin-bottom:0;">Clinical Data</div>
-    <div style="display:flex;align-items:center;gap:12px;">
-      {{if .LatestSync}}
-      <span class="text-muted" style="font-size:.8rem;">
-        Last synced: {{formatDateTime .LatestSync.SyncedAt}}
-      </span>
-      {{else}}
-      <span class="text-muted" style="font-size:.8rem;">Never synced</span>
-      {{end}}
-      <form action="/dashboard/sync?patient_id={{.Patient.FHIRID}}" method="POST" style="display:inline;">
-        <button class="btn btn-primary" type="submit" style="padding:6px 14px;font-size:.875rem;" id="syncBtn" onclick="onSyncClick()">
-          &#x21bb;&nbsp;Sync with EHR
-        </button>
-      </form>
+    {{/* SMART Inspector */}}
+    <div class="card">
+      <details>
+        <summary>SMART Inspector</summary>
+        <div class="mt-4">
+          <div class="detail-item mb-4">
+            <span class="detail-label">FHIR Base URL</span>
+            <code class="code-block">{{.Session.EHRURL}}</code>
+          </div>
+          <div class="detail-item mb-4">
+            <span class="detail-label">Scopes</span>
+            <code class="code-block">{{.Session.Scope}}</code>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Access Token</span>
+            <code class="code-block">{{.Session.AccessToken}}</code>
+          </div>
+        </div>
+      </details>
     </div>
+
+    {{end}}
   </div>
 
-  <div class="tabs">
-    <button class="tab-link active" onclick="openTab(event, 'observations')">Vitals & Labs ({{len .Observations}})</button>
-    <button class="tab-link" onclick="openTab(event, 'conditions')">Conditions ({{len .Conditions}})</button>
-    <button class="tab-link" onclick="openTab(event, 'medications')">Medications ({{len .Medications}})</button>
-    <button class="tab-link" onclick="openTab(event, 'allergies')">Allergies ({{len .Allergies}})</button>
-    <button class="tab-link" onclick="openTab(event, 'notes')">Clinical Notes ({{len .DocumentReferences}})</button>
-  </div>
+  {{/* ---- Right Column: Clinical Data ---- */}}
+  <div class="md:col-span-2" style="grid-column: span 2;"> <!-- Force span 2 if grid lines up -->
+    {{if .Patient}}
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Clinical Record</h3>
+        <div class="flex items-center gap-4">
+          <span class="text-sm text-muted">
+            {{if .LatestSync}}Synced: {{formatDateTime .LatestSync.SyncedAt}}{{else}}Never synced{{end}}
+          </span>
+          <form action="/dashboard/sync?patient_id={{.Patient.FHIRID}}" method="POST" style="display:inline;">
+            <button class="btn btn-primary btn-sm" type="submit" id="syncBtn" onclick="onSyncClick()">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              Sync
+            </button>
+          </form>
+        </div>
+      </div>
 
-  {{/* ---- Observations Tab (Grouped by Category) ---- */}}
-  <div id="observations" class="tab-content" style="display:block;">
-    {{if .Observations}}
-    {{range $cat, $obs := groupByCategory .Observations}}
-    <div style="margin-bottom:20px;">
-      <h4 style="margin-bottom:12px;color:#333;">{{titleCase $cat}}</h4>
-      <table class="fhir-table">
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Code</th>
-            <th>Value</th>
-            <th style="width:60px;">Interpretation</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {{range $obs}}
-          <tr>
-            <td>{{orDash .EffectiveDate}}</td>
-            <td>{{orDash .CodeText}}</td>
-            <td>
-              {{if .ValueQuantity}}
-                {{printf "%.4g" (derefFloat64 .ValueQuantity)}} {{.ValueUnit}}
-                {{if or .ReferenceRangeLow .ReferenceRangeHigh}}
-                  <br/><span style="font-size:.8rem;color:#666;">
-                    [{{if .ReferenceRangeLow}}{{printf "%.4g" (derefFloat64 .ReferenceRangeLow)}}{{else}}—{{end}}–{{if .ReferenceRangeHigh}}{{printf "%.4g" (derefFloat64 .ReferenceRangeHigh)}}{{else}}—{{end}}]
-                  </span>
-                {{end}}
-              {{else if .ValueString}}
-                {{.ValueString}}
-              {{else}}
-                —
-              {{end}}
-            </td>
-            <td>
-              {{if .Interpretation}}
-                <span class="badge" style="font-size:.75rem;background:#e3f2fd;color:#1976d2;">{{.Interpretation}}</span>
-              {{else}}
-                —
-              {{end}}
-            </td>
-            <td><span class="badge badge-outline">{{.Status}}</span></td>
-          </tr>
+      <div class="tabs">
+        <button class="tab-btn active" onclick="openTab(event, 'observations')">Vitals & Labs <span class="badge badge-neutral ml-2">{{len .Observations}}</span></button>
+        <button class="tab-btn" onclick="openTab(event, 'conditions')">Conditions <span class="badge badge-neutral ml-2">{{len .Conditions}}</span></button>
+        <button class="tab-btn" onclick="openTab(event, 'medications')">Meds <span class="badge badge-neutral ml-2">{{len .Medications}}</span></button>
+        <button class="tab-btn" onclick="openTab(event, 'allergies')">Allergies <span class="badge badge-neutral ml-2">{{len .Allergies}}</span></button>
+        <button class="tab-btn" onclick="openTab(event, 'notes')">Notes <span class="badge badge-neutral ml-2">{{len .DocumentReferences}}</span></button>
+      </div>
+
+      {{/* Observations */}}
+      <div id="observations" class="tab-content active">
+        {{if .Observations}}
+          {{range $cat, $obs := groupByCategory .Observations}}
+          <div class="mb-4">
+            <h4 class="font-bold text-muted uppercase text-xs mb-2 tracking-wide">{{titleCase $cat}}</h4>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Code</th>
+                    <th>Value</th>
+                    <th>Interpretation</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {{range $obs}}
+                  <tr>
+                    <td>{{orDash .EffectiveDate}}</td>
+                    <td class="font-medium">{{orDash .CodeText}}</td>
+                    <td>
+                      {{if .ValueQuantity}}
+                        <strong>{{printf "%.4g" (derefFloat64 .ValueQuantity)}}</strong> {{.ValueUnit}}
+                        {{if or .ReferenceRangeLow .ReferenceRangeHigh}}
+                          <div class="text-xs text-muted">
+                            Ref: [{{if .ReferenceRangeLow}}{{printf "%.4g" (derefFloat64 .ReferenceRangeLow)}}{{else}}—{{end}} – {{if .ReferenceRangeHigh}}{{printf "%.4g" (derefFloat64 .ReferenceRangeHigh)}}{{else}}—{{end}}]
+                          </div>
+                        {{end}}
+                      {{else if .ValueString}}
+                        {{.ValueString}}
+                      {{else}}—{{end}}
+                    </td>
+                    <td>
+                      {{if .Interpretation}}
+                        <span class="badge badge-info">{{.Interpretation}}</span>
+                      {{else}}—{{end}}
+                    </td>
+                    <td><span class="badge badge-neutral">{{.Status}}</span></td>
+                  </tr>
+                  {{end}}
+                </tbody>
+              </table>
+            </div>
+          </div>
           {{end}}
-        </tbody>
-      </table>
+        {{else}}
+          <div class="text-center py-8 text-muted">No observations found.</div>
+        {{end}}
+      </div>
+
+      {{/* Conditions */}}
+      <div id="conditions" class="tab-content">
+        {{if .Conditions}}
+        <div class="flex gap-2 mb-4">
+          <button onclick="filterConditions('all')" class="btn btn-outline btn-sm active">All</button>
+          <button onclick="filterConditions('active')" class="btn btn-outline btn-sm">Active</button>
+          <button onclick="filterConditions('resolved')" class="btn btn-outline btn-sm">Resolved</button>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Condition</th>
+                <th>Status</th>
+                <th>Verification</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range .Conditions}}
+              <tr class="condition-row" data-status="{{.ClinicalStatus}}">
+                <td>{{orDash .RecordedDate}}</td>
+                <td class="font-medium">{{orDash .CodeText}}</td>
+                <td>
+                  {{if eq .ClinicalStatus "active"}}
+                    <span class="badge badge-success">Active</span>
+                  {{else if eq .ClinicalStatus "resolved"}}
+                    <span class="badge badge-neutral">Resolved</span>
+                  {{else}}
+                    <span class="badge badge-warning">{{.ClinicalStatus}}</span>
+                  {{end}}
+                </td>
+                <td>{{titleCase .VerificationStatus}}</td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </div>
+        {{else}}
+          <div class="text-center py-8 text-muted">No conditions found.</div>
+        {{end}}
+      </div>
+
+      {{/* Medications */}}
+      <div id="medications" class="tab-content">
+        {{if .Medications}}
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Authored</th>
+                <th>Medication</th>
+                <th>Dosage</th>
+                <th>Status</th>
+                <th>Requester</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range .Medications}}
+              <tr>
+                <td>{{orDash .AuthoredOn}}</td>
+                <td class="font-medium">{{orDash .MedCodeText}}</td>
+                <td>{{orDash .DosageText}}</td>
+                <td>
+                   {{if eq .Status "active"}}
+                    <span class="badge badge-success">Active</span>
+                   {{else}}
+                    <span class="badge badge-neutral">{{.Status}}</span>
+                   {{end}}
+                </td>
+                <td>{{orDash .RequesterDisplay}}</td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </div>
+        {{else}}
+          <div class="text-center py-8 text-muted">No medications found.</div>
+        {{end}}
+      </div>
+
+      {{/* Allergies */}}
+      <div id="allergies" class="tab-content">
+        {{if .Allergies}}
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Allergen</th>
+                <th>Type</th>
+                <th>Criticality</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range .Allergies}}
+              <tr>
+                <td>{{orDash .RecordedDate}}</td>
+                <td class="font-medium">{{orDash .CodeText}}</td>
+                <td>{{titleCase .Type}}</td>
+                <td>
+                  {{if eq .Criticality "high"}}
+                    <span class="badge badge-danger">High</span>
+                  {{else if eq .Criticality "medium"}}
+                    <span class="badge badge-warning">Medium</span>
+                  {{else}}
+                    <span class="badge badge-neutral">{{orDash .Criticality}}</span>
+                  {{end}}
+                </td>
+                <td>{{titleCase .ClinicalStatus}}</td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </div>
+        {{else}}
+          <div class="text-center py-8 text-muted">No allergies found.</div>
+        {{end}}
+      </div>
+
+      {{/* Notes */}}
+      <div id="notes" class="tab-content">
+        {{if .DocumentReferences}}
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Description</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{range .DocumentReferences}}
+              <tr>
+                <td>{{orDash .Date}}</td>
+                <td class="font-medium">{{orDash .TypeText}}</td>
+                <td>{{orDash .Description}}</td>
+                <td><span class="badge badge-neutral">{{orDash .Status}}</span></td>
+                <td>
+                  {{if .ContentURL}}
+                    <a href="{{.ContentURL}}" target="_blank" class="btn btn-outline btn-sm" style="padding: 2px 8px; font-size: 0.75rem;">View</a>
+                  {{else}}
+                    <span class="text-muted text-xs">Inline</span>
+                  {{end}}
+                </td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </div>
+        {{else}}
+          <div class="text-center py-8 text-muted">No clinical notes found.</div>
+        {{end}}
+      </div>
+
     </div>
-    {{end}}
-    {{else}}
-    <p class="text-muted mt-4">No observations found. Use "Sync with EHR" to pull data.</p>
-    {{end}}
-  </div>
-
-  {{/* ---- Conditions Tab (with filter bar) ---- */}}
-  <div id="conditions" class="tab-content" style="display:none;">
-    {{if .Conditions}}
-    <div style="margin-bottom:12px;display:flex;gap:8px;">
-      <button onclick="filterConditions('all')" class="btn btn-outline" style="padding:6px 12px;font-size:.85rem;">All</button>
-      <button onclick="filterConditions('active')" class="btn btn-outline" style="padding:6px 12px;font-size:.85rem;">Active</button>
-      <button onclick="filterConditions('resolved')" class="btn btn-outline" style="padding:6px 12px;font-size:.85rem;">Resolved</button>
-    </div>
-    <table class="fhir-table">
-      <thead>
-        <tr>
-          <th>Recorded Date</th>
-          <th>Code</th>
-          <th>Clinical Status</th>
-          <th>Verification</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{range .Conditions}}
-        <tr class="condition-row" data-status="{{.ClinicalStatus}}">
-          <td>{{orDash .RecordedDate}}</td>
-          <td>{{orDash .CodeText}}</td>
-          <td>{{titleCase .ClinicalStatus}}</td>
-          <td>{{titleCase .VerificationStatus}}</td>
-        </tr>
-        {{end}}
-      </tbody>
-    </table>
-    {{else}}
-    <p class="text-muted mt-4">No conditions found. Use "Sync with EHR" to pull data.</p>
-    {{end}}
-  </div>
-
-  {{/* ---- Medications Tab ---- */}}
-  <div id="medications" class="tab-content" style="display:none;">
-    {{if .Medications}}
-    <table class="fhir-table">
-      <thead>
-        <tr>
-          <th>Authored On</th>
-          <th>Medication</th>
-          <th>Dosage</th>
-          <th>Status</th>
-          <th>Requester</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{range .Medications}}
-        <tr>
-          <td>{{orDash .AuthoredOn}}</td>
-          <td>{{orDash .MedCodeText}}</td>
-          <td>{{orDash .DosageText}}</td>
-          <td><span class="badge badge-outline">{{.Status}}</span></td>
-          <td>{{orDash .RequesterDisplay}}</td>
-        </tr>
-        {{end}}
-      </tbody>
-    </table>
-    {{else}}
-    <p class="text-muted mt-4">No medications found. Use "Sync with EHR" to pull data.</p>
-    {{end}}
-  </div>
-
-  {{/* ---- Allergies Tab ---- */}}
-  <div id="allergies" class="tab-content" style="display:none;">
-    {{if .Allergies}}
-    <table class="fhir-table">
-      <thead>
-        <tr>
-          <th>Recorded Date</th>
-          <th>Allergen</th>
-          <th>Type</th>
-          <th>Criticality</th>
-          <th>Clinical Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{range .Allergies}}
-        <tr>
-          <td>{{orDash .RecordedDate}}</td>
-          <td>{{orDash .CodeText}}</td>
-          <td>{{titleCase .Type}}</td>
-          <td>
-            {{if eq .Criticality "high"}}
-              <span class="badge" style="background:#dc3545;color:white;">{{.Criticality}}</span>
-            {{else if eq .Criticality "medium"}}
-              <span class="badge" style="background:#ffc107;color:#000;">{{.Criticality}}</span>
-            {{else}}
-              <span class="badge badge-outline">{{orDash .Criticality}}</span>
-            {{end}}
-          </td>
-          <td>{{titleCase .ClinicalStatus}}</td>
-        </tr>
-        {{end}}
-      </tbody>
-    </table>
-    {{else}}
-    <p class="text-muted mt-4">No allergies found. Use "Sync with EHR" to pull data.</p>
-    {{end}}
-  </div>
-
-  {{/* ---- Clinical Notes Tab ---- */}}
-  <div id="notes" class="tab-content" style="display:none;">
-    {{if .DocumentReferences}}
-    <table class="fhir-table">
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Type</th>
-          <th>Description</th>
-          <th>Status</th>
-          <th>Content</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{range .DocumentReferences}}
-        <tr>
-          <td>{{orDash .Date}}</td>
-          <td>{{orDash .TypeText}}</td>
-          <td>{{orDash .Description}}</td>
-          <td><span class="badge badge-outline">{{orDash .Status}}</span></td>
-          <td>
-            {{if .ContentURL}}
-              <a href="{{.ContentURL}}" target="_blank" rel="noopener noreferrer" style="font-size:.8rem;">View</a>
-            {{else if .ContentData}}
-              <span class="text-muted" style="font-size:.8rem;">Inline ({{.ContentType}})</span>
-            {{else}}
-              —
-            {{end}}
-          </td>
-        </tr>
-        {{end}}
-      </tbody>
-    </table>
-    {{else}}
-    <p class="text-muted mt-4">No clinical notes found. Use "Sync with EHR" to pull data.</p>
-    {{end}}
+    {{end}} {{/* End if .Patient */}}
   </div>
 </div>
 
-{{/* ---- SMART Inspector Accordion ---- */}}
-<details style="margin-bottom:20px;">
-  <summary style="cursor:pointer; font-size:.875rem; font-weight:600; color:var(--color-primary); padding:8px 0;">
-    SMART Inspector
-  </summary>
-  <div class="card" style="margin-top:8px;">
-    <div class="mt-4">
-      <div class="detail-item mb-4">
-        <label>FHIR Base URL (ISS)</label>
-        <p class="text-muted">{{.Session.EHRURL}}</p>
-      </div>
-      <div class="detail-item mb-4">
-        <label>Granted Scopes</label>
-        <p class="text-muted">{{.Session.Scope}}</p>
-      </div>
-      <div class="detail-item mb-4">
-        <label>Access Token</label>
-        <code style="word-break: break-all; font-size: 0.75rem; background: var(--color-bg); padding: 8px; border-radius: 4px; display: block;">{{.Session.AccessToken}}</code>
-      </div>
-      {{if .Session.IDToken}}
-      <div class="detail-item mt-4">
-        <label>ID Token</label>
-        <code style="word-break: break-all; font-size: 0.75rem; background: var(--color-bg); padding: 8px; border-radius: 4px; display: block;">{{.Session.IDToken}}</code>
-      </div>
-      {{end}}
-    </div>
-  </div>
-</details>
-
-{{/* ---- Raw FHIR resource accordion ---- */}}
-{{if .RawPatient}}
-<details style="margin-bottom:20px;">
-  <summary style="cursor:pointer; font-size:.875rem; font-weight:600; color:var(--color-primary); padding:8px 0;">
-    View Raw FHIR Patient Resource
-  </summary>
-  <div class="card" style="margin-top:8px;">
-    <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
-      <thead>
-        <tr style="border-bottom:2px solid var(--color-border);">
-          <th style="text-align:left;padding:6px 12px 8px;color:var(--color-muted);font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;">Field</th>
-          <th style="text-align:left;padding:6px 12px 8px;color:var(--color-muted);font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;">Value</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr style="border-bottom:1px solid var(--color-border);">
-          <td style="padding:7px 12px;font-weight:600;">resourceType</td>
-          <td style="padding:7px 12px;">{{.RawPatient.ResourceTypeField}}</td>
-        </tr>
-        <tr style="border-bottom:1px solid var(--color-border);">
-          <td style="padding:7px 12px;font-weight:600;">id</td>
-          <td style="padding:7px 12px;">{{.RawPatient.ID}}</td>
-        </tr>
-        <tr style="border-bottom:1px solid var(--color-border);">
-          <td style="padding:7px 12px;font-weight:600;">gender</td>
-          <td style="padding:7px 12px;">{{.RawPatient.Gender}}</td>
-        </tr>
-        <tr style="border-bottom:1px solid var(--color-border);">
-          <td style="padding:7px 12px;font-weight:600;">birthDate</td>
-          <td style="padding:7px 12px;">{{.RawPatient.BirthDate}}</td>
-        </tr>
-        {{range .RawPatient.Name}}
-        <tr style="border-bottom:1px solid var(--color-border);">
-          <td style="padding:7px 12px;font-weight:600;">name ({{.Use}})</td>
-          <td style="padding:7px 12px;">
-            {{range .Given}}{{.}} {{end}}{{.Family}}
-          </td>
-        </tr>
-        {{end}}
-        {{range .RawPatient.Telecom}}
-        <tr style="border-bottom:1px solid var(--color-border);">
-          <td style="padding:7px 12px;font-weight:600;">telecom ({{.System}})</td>
-          <td style="padding:7px 12px;">{{.Value}}</td>
-        </tr>
-        {{end}}
-        {{range .RawPatient.Address}}
-        <tr style="border-bottom:1px solid var(--color-border);">
-          <td style="padding:7px 12px;font-weight:600;">address</td>
-          <td style="padding:7px 12px;">
-            {{range .Line}}{{.}}, {{end}}{{.City}}{{if .State}}, {{.State}}{{end}} {{.PostalCode}}
-          </td>
-        </tr>
-        {{end}}
-      </tbody>
-    </table>
-  </div>
-</details>
 {{end}}
-
-{{end}}{{/* end if .Patient */}}
-
-{{end}}{{/* end content */}}
 
 {{define "scripts"}}
 <script>
@@ -454,18 +386,29 @@ function openTab(evt, tabName) {
   var i, tabcontent, tablinks;
   tabcontent = document.getElementsByClassName("tab-content");
   for (i = 0; i < tabcontent.length; i++) {
+    tabcontent[i].classList.remove("active");
     tabcontent[i].style.display = "none";
   }
-  tablinks = document.getElementsByClassName("tab-link");
+  tablinks = document.getElementsByClassName("tab-btn");
   for (i = 0; i < tablinks.length; i++) {
-    tablinks[i].className = tablinks[i].className.replace(" active", "");
+    tablinks[i].classList.remove("active");
   }
-  document.getElementById(tabName).style.display = "block";
-  evt.currentTarget.className += " active";
+  
+  var target = document.getElementById(tabName);
+  target.style.display = "block";
+  // Small timeout to allow display:block to apply before adding active class for animation
+  setTimeout(() => target.classList.add("active"), 10);
+  
+  evt.currentTarget.classList.add("active");
 }
 
 function filterConditions(status) {
   var rows = document.getElementsByClassName("condition-row");
+  // Update buttons
+  var btns = document.querySelectorAll('#conditions .btn-outline');
+  btns.forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+
   for (var i = 0; i < rows.length; i++) {
     var rowStatus = rows[i].getAttribute("data-status");
     if (status === "all" || rowStatus === status) {
@@ -478,8 +421,15 @@ function filterConditions(status) {
 
 function onSyncClick() {
   var btn = document.getElementById("syncBtn");
-  btn.disabled = true;
-  btn.textContent = "Syncing\u2026";
+  // Delay disabling to ensure form submission triggers
+  setTimeout(function() {
+    btn.disabled = true;
+    btn.innerHTML = `<svg class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Syncing...`;
+  }, 50);
 }
 </script>
+<style>
+  .animate-spin { animation: spin 1s linear infinite; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+</style>
 {{end}}

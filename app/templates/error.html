@@ -5,9 +5,16 @@
 {{end}}
 
 {{define "content"}}
-<div class="hero">
-  <h1>{{.Code}}</h1>
-  <p>{{.Message}}</p>
-  <a class="btn btn-outline" href="/">Go Home</a>
+<div class="card max-w-lg mx-auto mt-12 text-center p-8 shadow-md">
+  <div class="mb-6 text-danger" style="display:flex; justify-content:center;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+  </div>
+  <h1 class="text-3xl font-bold mb-2">{{.Code}}</h1>
+  <p class="text-lg text-muted mb-8">{{.Message}}</p>
+  
+  <div class="flex justify-center gap-4">
+    <a class="btn btn-outline" href="/">Go Home</a>
+    <a class="btn btn-primary" href="javascript:history.back()">Try Again</a>
+  </div>
 </div>
 {{end}}

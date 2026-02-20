@@ -92,6 +92,7 @@ func main() {
 	mux.HandleFunc("/", h.HandleRoot)
 	mux.HandleFunc("/launch", h.HandleLaunch)
 	mux.HandleFunc("/auth-redirect", h.HandleAuthRedirect)
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("app/static"))))
 
 	// Session-required routes — wrapped with the hard-gate middleware.
 	mux.Handle("/dashboard", sessionMW.RequireSession(http.HandlerFunc(h.HandleDashboard)))

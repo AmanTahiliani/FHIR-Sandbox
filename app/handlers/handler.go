@@ -172,10 +172,5 @@ func TemplateFuncs() template.FuncMap {
 			}
 			return false
 		},
-		"last": func(slice interface{}) interface{} {
-			// Helper function to get the last element of a slice
-			// Used in template logic
-			return nil
-		},
 	}
 }

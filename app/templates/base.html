@@ -4,233 +4,31 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FHIR Health Platform</title>
+  <link rel="stylesheet" href="/static/css/styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    /* ---- Reset & base ---- */
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --color-primary:   #0062cc;
-      --color-primary-h: #004fa3;
-      --color-bg:        #f4f6f9;
-      --color-surface:   #ffffff;
-      --color-border:    #dde3ec;
-      --color-text:      #1a2533;
-      --color-muted:     #6b7a99;
-      --color-patient:   #0a7c59;
-      --color-hcp:       #1a5fb4;
-      --radius:          8px;
-      --shadow:          0 1px 4px rgba(0,0,0,.08);
-    }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background: var(--color-bg);
-      color: var(--color-text);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-
-    /* ---- Nav ---- */
-    header {
-      background: var(--color-surface);
-      border-bottom: 1px solid var(--color-border);
-      padding: 0 24px;
-      height: 56px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      box-shadow: var(--shadow);
-    }
-    .brand { font-size: 1.1rem; font-weight: 700; color: var(--color-primary); letter-spacing: -.2px; }
-    .brand span { color: var(--color-text); font-weight: 400; }
-    nav a, nav button {
-      font-size: .875rem;
-      color: var(--color-muted);
-      text-decoration: none;
-      background: none;
-      border: none;
-      cursor: pointer;
-      padding: 6px 12px;
-      border-radius: 6px;
-      transition: background .15s, color .15s;
-    }
-    nav a:hover, nav button:hover { background: var(--color-bg); color: var(--color-text); }
-
-    /* ---- Main layout ---- */
-    main { flex: 1; padding: 32px 24px; max-width: 960px; margin: 0 auto; width: 100%; }
-    footer {
-      text-align: center;
-      font-size: .75rem;
-      color: var(--color-muted);
-      padding: 16px;
-      border-top: 1px solid var(--color-border);
-    }
-
-    /* ---- Cards ---- */
-    .card {
-      background: var(--color-surface);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      padding: 24px;
-      margin-bottom: 20px;
-    }
-    .card-title {
-      font-size: .65rem;
-      font-weight: 700;
-      letter-spacing: .08em;
-      text-transform: uppercase;
-      color: var(--color-muted);
-      margin-bottom: 16px;
-    }
-
-    /* ---- Badge ---- */
-    .badge {
-      display: inline-block;
-      font-size: .7rem;
-      font-weight: 600;
-      letter-spacing: .04em;
-      text-transform: uppercase;
-      padding: 3px 10px;
-      border-radius: 20px;
-    }
-    .badge-patient      { background: #d1fae5; color: var(--color-patient); }
-    .badge-practitioner { background: #dbeafe; color: var(--color-hcp); }
-
-    /* ---- Detail grid ---- */
-    .detail-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 12px 20px;
-    }
-    .detail-item label {
-      display: block;
-      font-size: .72rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: .06em;
-      color: var(--color-muted);
-      margin-bottom: 3px;
-    }
-    .detail-item p { font-size: .95rem; color: var(--color-text); }
-
-    /* ---- User row (header block) ---- */
-    .user-header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
-    .avatar {
-      width: 52px; height: 52px;
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 1.3rem; font-weight: 700; color: #fff;
-      flex-shrink: 0;
-    }
-    .avatar-patient      { background: var(--color-patient); }
-    .avatar-practitioner { background: var(--color-hcp); }
-    .user-header-info h2 { font-size: 1.15rem; font-weight: 700; margin-bottom: 4px; }
-
-    /* ---- Buttons ---- */
-    .btn {
-      display: inline-block;
-      padding: 9px 18px;
-      border-radius: 6px;
-      font-size: .875rem;
-      font-weight: 600;
-      cursor: pointer;
-      border: none;
-      transition: background .15s, box-shadow .15s;
-      text-decoration: none;
-    }
-    .btn-primary { background: var(--color-primary); color: #fff; }
-    .btn-primary:hover { background: var(--color-primary-h); }
-    .btn-outline { background: transparent; color: var(--color-primary); border: 1.5px solid var(--color-primary); }
-    .btn-outline:hover { background: #e8f0ff; }
-    .btn-danger  { background: #dc2626; color: #fff; }
-    .btn-danger:hover { background: #b91c1c; }
-
-    /* ---- Empty / hero ---- */
-    .hero {
-      text-align: center;
-      padding: 72px 24px;
-    }
-    .hero h1 { font-size: 2rem; font-weight: 800; margin-bottom: 12px; }
-    .hero p  { font-size: 1rem; color: var(--color-muted); max-width: 480px; margin: 0 auto 28px; }
-
-    /* ---- Divider ---- */
-    hr { border: none; border-top: 1px solid var(--color-border); margin: 20px 0; }
-
-    /* ---- Utility ---- */
-    .text-muted { color: var(--color-muted); font-size: .85rem; }
-    .mt-4 { margin-top: 16px; }
-    .mb-4 { margin-bottom: 16px; }
-    .flex { display: flex; }
-    .gap-2 { gap: 8px; }
-    .items-center { align-items: center; }
-    .justify-between { justify-content: space-between; }
-
-    /* ---- FHIR Table ---- */
-    .fhir-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: .9rem;
-      margin-top: 12px;
-    }
-    .fhir-table th {
-      text-align: left;
-      padding: 10px 12px;
-      border-bottom: 2px solid var(--color-border);
-      color: var(--color-muted);
-      font-size: .7rem;
-      text-transform: uppercase;
-      letter-spacing: .06em;
-    }
-    .fhir-table td {
-      padding: 12px;
-      border-bottom: 1px solid var(--color-border);
-    }
-    .badge-outline {
-      background: transparent;
-      border: 1px solid var(--color-border);
-      color: var(--color-muted);
-    }
-
-    /* ---- Tabs ---- */
-    .tabs {
-      display: flex;
-      border-bottom: 1px solid var(--color-border);
-      margin-bottom: 16px;
-    }
-    .tab-link {
-      padding: 10px 20px;
-      cursor: pointer;
-      border: none;
-      background: none;
-      font-size: .875rem;
-      font-weight: 600;
-      color: var(--color-muted);
-      border-bottom: 2px solid transparent;
-      transition: all .2s;
-    }
-    .tab-link:hover {
-      color: var(--color-primary);
-    }
-    .tab-link.active {
-      color: var(--color-primary);
-      border-bottom: 2px solid var(--color-primary);
-    }
+    body { font-family: 'Inter', sans-serif; }
   </style>
 </head>
 <body>
-  <header>
-    <div class="brand">FHIR <span>Health Platform</span></div>
-    <nav>
-      {{block "nav" .}}{{end}}
-    </nav>
+  <header class="navbar">
+    <div class="container navbar-content">
+      <div class="brand">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        FHIR <span>Sandbox</span>
+      </div>
+      <nav class="nav-links">
+        {{block "nav" .}}{{end}}
+      </nav>
+    </div>
   </header>
 
-  <main>
+  <main class="container">
     {{block "content" .}}{{end}}
   </main>
 
-  <footer>
-    FHIR Health Platform &mdash; SMART on FHIR R4
+  <footer style="text-align: center; padding: 2rem; color: var(--text-muted); font-size: 0.875rem;">
+    <p>FHIR Health Platform &copy; 2026 — SMART on FHIR R4 Sandbox</p>
   </footer>
 
   {{block "scripts" .}}{{end}}
