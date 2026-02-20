@@ -1,0 +1,15 @@
+{{template "base.html" .}}
+
+{{define "nav"}}
+  <a href="/">Home</a>
+{{end}}
+
+{{define "content"}}
+<div class="hero">
+  <h1>FHIR Health Platform</h1>
+  <p>A SMART on FHIR-powered platform for secure, context-aware EHR integration. Launch from your EHR to get started.</p>
+  <a class="btn btn-primary" href="https://launch.smarthealthit.org/?launch_url=http%3A%2F%2Flocalhost%3A8080%2Flaunch" target="_blank" rel="noopener">
+    Launch with SmartHealthIT Sandbox
+  </a>
+</div>
+{{end}}

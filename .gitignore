@@ -1,0 +1,47 @@
+# Binaries
+fhir-sandbox
+bin/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+coverage.out
+*.coverprofile
+
+# Dependency directories
+/vendor/
+node_modules/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.iml
+
+# Environment / secrets
+.env
+.env.*
+secrets.json
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+
+# Logs and runtime
+*.log
+*.tmp
+*.cache
+
+# Build outputs
+dist/
+out/

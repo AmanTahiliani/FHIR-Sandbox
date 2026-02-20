@@ -1,0 +1,13 @@
+{{template "base.html" .}}
+
+{{define "nav"}}
+  <a href="/">Home</a>
+{{end}}
+
+{{define "content"}}
+<div class="hero">
+  <h1>{{.Code}}</h1>
+  <p>{{.Message}}</p>
+  <a class="btn btn-outline" href="/">Go Home</a>
+</div>
+{{end}}
