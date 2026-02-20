@@ -107,20 +107,23 @@ type UserContextKey struct{}
 // Observation is the persisted representation of a FHIR R4 Observation.
 // The natural key is (fhir_id, ehr_url).
 type Observation struct {
-	ID             string    `json:"id"              db:"id"`
-	FHIRID         string    `json:"fhir_id"         db:"fhir_id"`
-	EHRURL         string    `json:"ehr_url"         db:"ehr_url"`
-	PatientFHIRID  string    `json:"patient_fhir_id" db:"patient_fhir_id"`
-	Status         string    `json:"status"          db:"status"`
-	Category       string    `json:"category"        db:"category"`
-	CodeText       string    `json:"code_text"       db:"code_text"`
-	CodeSystem     string    `json:"code_system"     db:"code_system"`
-	CodeCode       string    `json:"code_code"       db:"code_code"`
-	EffectiveDate  string    `json:"effective_date"  db:"effective_date"`
-	ValueQuantity  *float64  `json:"value_quantity"  db:"value_quantity"`
-	ValueUnit      string    `json:"value_unit"      db:"value_unit"`
-	ValueString    string    `json:"value_string"    db:"value_string"`
-	SyncedAt       time.Time `json:"synced_at"       db:"synced_at"`
+	ID                 string    `json:"id"                   db:"id"`
+	FHIRID             string    `json:"fhir_id"              db:"fhir_id"`
+	EHRURL             string    `json:"ehr_url"              db:"ehr_url"`
+	PatientFHIRID      string    `json:"patient_fhir_id"      db:"patient_fhir_id"`
+	Status             string    `json:"status"               db:"status"`
+	Category           string    `json:"category"             db:"category"`
+	CodeText           string    `json:"code_text"            db:"code_text"`
+	CodeSystem         string    `json:"code_system"          db:"code_system"`
+	CodeCode           string    `json:"code_code"            db:"code_code"`
+	EffectiveDate      string    `json:"effective_date"       db:"effective_date"`
+	ValueQuantity      *float64  `json:"value_quantity"       db:"value_quantity"`
+	ValueUnit          string    `json:"value_unit"           db:"value_unit"`
+	ValueString        string    `json:"value_string"         db:"value_string"`
+	Interpretation     string    `json:"interpretation"       db:"interpretation"`
+	ReferenceRangeLow  *float64  `json:"ref_range_low"        db:"ref_range_low"`
+	ReferenceRangeHigh *float64  `json:"ref_range_high"       db:"ref_range_high"`
+	SyncedAt           time.Time `json:"synced_at"            db:"synced_at"`
 }
 
 // Condition is the persisted representation of a FHIR R4 Condition.
@@ -158,6 +161,41 @@ type DocumentReference struct {
 	ContentURL    string    `json:"content_url"     db:"content_url"`
 	ContentData   string    `json:"content_data"    db:"content_data"`
 	SyncedAt      time.Time `json:"synced_at"       db:"synced_at"`
+}
+
+// MedicationRequest is the persisted representation of a FHIR R4 MedicationRequest.
+type MedicationRequest struct {
+	ID               string    `json:"id"               db:"id"`
+	FHIRID           string    `json:"fhir_id"          db:"fhir_id"`
+	EHRURL           string    `json:"ehr_url"          db:"ehr_url"`
+	PatientFHIRID    string    `json:"patient_fhir_id"  db:"patient_fhir_id"`
+	Status           string    `json:"status"           db:"status"`
+	Intent           string    `json:"intent"           db:"intent"`
+	MedCodeText      string    `json:"med_code_text"    db:"med_code_text"`
+	MedCodeSystem    string    `json:"med_code_system"  db:"med_code_system"`
+	MedCodeCode      string    `json:"med_code_code"    db:"med_code_code"`
+	AuthoredOn       string    `json:"authored_on"      db:"authored_on"`
+	RequesterDisplay string    `json:"requester_display" db:"requester_display"`
+	DosageText       string    `json:"dosage_text"      db:"dosage_text"`
+	SyncedAt         time.Time `json:"synced_at"        db:"synced_at"`
+}
+
+// AllergyIntolerance is the persisted representation of a FHIR R4 AllergyIntolerance.
+type AllergyIntolerance struct {
+	ID                 string    `json:"id"                    db:"id"`
+	FHIRID             string    `json:"fhir_id"               db:"fhir_id"`
+	EHRURL             string    `json:"ehr_url"               db:"ehr_url"`
+	PatientFHIRID      string    `json:"patient_fhir_id"       db:"patient_fhir_id"`
+	ClinicalStatus     string    `json:"clinical_status"       db:"clinical_status"`
+	VerificationStatus string    `json:"verification_status"   db:"verification_status"`
+	Type               string    `json:"type"                  db:"type"`
+	Category           string    `json:"category"              db:"category"`
+	Criticality        string    `json:"criticality"           db:"criticality"`
+	CodeText           string    `json:"code_text"             db:"code_text"`
+	CodeSystem         string    `json:"code_system"           db:"code_system"`
+	CodeCode           string    `json:"code_code"             db:"code_code"`
+	RecordedDate       string    `json:"recorded_date"         db:"recorded_date"`
+	SyncedAt           time.Time `json:"synced_at"             db:"synced_at"`
 }
 
 // PatientSync records a completed FHIR sync event for a patient.

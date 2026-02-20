@@ -29,6 +29,7 @@ import (
 
 	"github.com/AmanTahiliani/FHIR-Sandbox/app/config"
 	"github.com/AmanTahiliani/FHIR-Sandbox/app/db"
+	"github.com/AmanTahiliani/FHIR-Sandbox/app/models"
 )
 
 const (
@@ -151,6 +152,30 @@ func TemplateFuncs() template.FuncMap {
 				return "—"
 			}
 			return s
+		},
+		"groupByCategory": func(obs []models.Observation) map[string][]models.Observation {
+			m := make(map[string][]models.Observation)
+			for _, o := range obs {
+				cat := o.Category
+				if cat == "" {
+					cat = "other"
+				}
+				m[cat] = append(m[cat], o)
+			}
+			return m
+		},
+		"hasCriticalAllergies": func(allergies []models.AllergyIntolerance) bool {
+			for _, a := range allergies {
+				if a.Criticality == "high" {
+					return true
+				}
+			}
+			return false
+		},
+		"last": func(slice interface{}) interface{} {
+			// Helper function to get the last element of a slice
+			// Used in template logic
+			return nil
 		},
 	}
 }

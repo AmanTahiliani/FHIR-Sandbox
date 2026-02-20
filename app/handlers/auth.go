@@ -9,8 +9,8 @@
 //  5. Fetch the Patient FHIR resource using the access token.
 //  6. Resolve the practitioner from the token response. The SMART spec allows
 //     the practitioner to appear in two places — we handle both:
-//       a. tokenResp.Practitioner — a bare FHIR ID (some EHRs)
-//       b. tokenResp.User         — a relative reference "Practitioner/<id>" (SmartHealthIT)
+//     a. tokenResp.Practitioner — a bare FHIR ID (some EHRs)
+//     b. tokenResp.User         — a relative reference "Practitioner/<id>" (SmartHealthIT)
 //  7. Upsert both users into the database.
 //  8. Create a server-side session for the HCP and set the session cookie.
 //  9. Render the patient dashboard.
@@ -196,6 +196,7 @@ func (h *Handler) HandleAuthRedirect(w http.ResponseWriter, r *http.Request) {
 //   - A bare ID (if the context implies it): "123"
 //   - A relative reference: "Practitioner/123"
 //   - An absolute FHIR URL: "https://ehr.com/fhir/Practitioner/123"
+//
 // Returns an empty string if the value is not a Practitioner reference.
 func parsePractitionerFromUserField(user string) string {
 	// If it's a URL, take the path part.
@@ -214,7 +215,7 @@ func parsePractitionerFromUserField(user string) string {
 	if idx := strings.Index(user, prefix); idx != -1 {
 		return strings.TrimPrefix(user[idx:], prefix)
 	}
-	
+
 	return ""
 }
 

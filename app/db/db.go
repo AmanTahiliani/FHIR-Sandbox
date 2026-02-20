@@ -193,6 +193,52 @@ var migrations = []migration{
 		CREATE INDEX IF NOT EXISTS idx_patient_syncs_patient ON patient_syncs(patient_fhir_id, ehr_url);
 		`,
 	},
+	{
+		version: 4,
+		sql: `
+		ALTER TABLE observations ADD COLUMN interpretation TEXT NOT NULL DEFAULT '';
+		ALTER TABLE observations ADD COLUMN ref_range_low REAL;
+		ALTER TABLE observations ADD COLUMN ref_range_high REAL;
+
+		CREATE TABLE IF NOT EXISTS medication_requests (
+			id              TEXT PRIMARY KEY,
+			fhir_id         TEXT NOT NULL,
+			ehr_url         TEXT NOT NULL,
+			patient_fhir_id TEXT NOT NULL,
+			status          TEXT NOT NULL DEFAULT '',
+			intent          TEXT NOT NULL DEFAULT '',
+			med_code_text   TEXT NOT NULL DEFAULT '',
+			med_code_system TEXT NOT NULL DEFAULT '',
+			med_code_code   TEXT NOT NULL DEFAULT '',
+			authored_on     TEXT NOT NULL DEFAULT '',
+			requester_display TEXT NOT NULL DEFAULT '',
+			dosage_text     TEXT NOT NULL DEFAULT '',
+			synced_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(fhir_id, ehr_url)
+		);
+
+		CREATE TABLE IF NOT EXISTS allergy_intolerances (
+			id                  TEXT PRIMARY KEY,
+			fhir_id             TEXT NOT NULL,
+			ehr_url             TEXT NOT NULL,
+			patient_fhir_id     TEXT NOT NULL,
+			clinical_status     TEXT NOT NULL DEFAULT '',
+			verification_status TEXT NOT NULL DEFAULT '',
+			type                TEXT NOT NULL DEFAULT '',
+			category            TEXT NOT NULL DEFAULT '',
+			criticality         TEXT NOT NULL DEFAULT '',
+			code_text           TEXT NOT NULL DEFAULT '',
+			code_system         TEXT NOT NULL DEFAULT '',
+			code_code           TEXT NOT NULL DEFAULT '',
+			recorded_date       TEXT NOT NULL DEFAULT '',
+			synced_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(fhir_id, ehr_url)
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_medication_requests_patient ON medication_requests(patient_fhir_id, ehr_url);
+		CREATE INDEX IF NOT EXISTS idx_allergy_intolerances_patient ON allergy_intolerances(patient_fhir_id, ehr_url);
+		`,
+	},
 	// Future migrations: append new entries here with incrementing version numbers.
 	// Example:
 	// {
@@ -347,6 +393,36 @@ func (s *Store) GetUserByID(id string) (*models.User, error) {
 		return nil, err
 	}
 	return u, nil
+}
+
+// ListUsersByRole retrieves all users with the given role and originating EHR URL.
+func (s *Store) ListUsersByRole(role models.Role, ehrURL string) ([]models.User, error) {
+	rows, err := s.db.Query(`
+		SELECT id, fhir_resource_type, fhir_id, ehr_url, role,
+		       first_name, middle_name, last_name, dob, gender, email,
+		       created_at, updated_at
+		FROM users WHERE role = ? AND ehr_url = ?
+		ORDER BY last_name ASC, first_name ASC`,
+		string(role), ehrURL,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("db: list users by role: %w", err)
+	}
+	defer rows.Close()
+
+	var users []models.User
+	for rows.Next() {
+		var u models.User
+		if err := rows.Scan(
+			&u.ID, &u.FHIRResourceType, &u.FHIRID, &u.EHRURL, &u.Role,
+			&u.FirstName, &u.MiddleName, &u.LastName, &u.DOB, &u.Gender, &u.Email,
+			&u.CreatedAt, &u.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("db: scan user: %w", err)
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
 }
 
 // ---------------------------------------------------------------------------

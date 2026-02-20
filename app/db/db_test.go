@@ -145,6 +145,45 @@ func TestUpsertUser_TenantIsolation(t *testing.T) {
 	}
 }
 
+func TestListUsersByRole(t *testing.T) {
+	store := newTestStore(t)
+	ehrURL := "https://ehr.example.com/fhir"
+
+	users := []*models.User{
+		{FHIRID: "p1", EHRURL: ehrURL, Role: models.RolePatient, FirstName: "Zoe", LastName: "Adams"},
+		{FHIRID: "p2", EHRURL: ehrURL, Role: models.RolePatient, FirstName: "Alice", LastName: "Adams"},
+		{FHIRID: "d1", EHRURL: ehrURL, Role: models.RolePractitioner, FirstName: "Dr.", LastName: "House"},
+		{FHIRID: "p3", EHRURL: ehrURL, Role: models.RolePatient, FirstName: "Charlie", LastName: "Brown"},
+	}
+
+	for _, u := range users {
+		u.FHIRResourceType = "Patient"
+		if u.Role == models.RolePractitioner {
+			u.FHIRResourceType = "Practitioner"
+		}
+		if _, err := store.UpsertUser(u); err != nil {
+			t.Fatalf("failed to upsert user %s: %v", u.FHIRID, err)
+		}
+	}
+
+	got, err := store.ListUsersByRole(models.RolePatient, ehrURL)
+	if err != nil {
+		t.Fatalf("ListUsersByRole: %v", err)
+	}
+
+	if len(got) != 3 {
+		t.Errorf("got %d patients, want 3", len(got))
+	}
+
+	// Verify ordering: Adams, Alice -> Adams, Zoe -> Brown, Charlie
+	expected := []string{"Alice", "Zoe", "Charlie"}
+	for i, name := range expected {
+		if got[i].FirstName != name {
+			t.Errorf("at index %d: got FirstName %q, want %q", i, got[i].FirstName, name)
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Session tests
 // ---------------------------------------------------------------------------

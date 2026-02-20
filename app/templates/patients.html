@@ -1,0 +1,85 @@
+{{template "base.html" .}}
+
+{{define "nav"}}
+  <a href="/dashboard">Dashboard</a>
+  <form action="/logout" method="POST" style="display:inline">
+    <button class="btn btn-danger" type="submit" style="padding:6px 12px;font-size:.875rem;">Logout</button>
+  </form>
+{{end}}
+
+{{define "scripts"}}
+<script>
+function filterPatients() {
+  var input = document.getElementById("patientSearch");
+  var filter = input.value.toLowerCase();
+  var rows = document.getElementsByClassName("patient-row");
+
+  for (var i = 0; i < rows.length; i++) {
+    var name = rows[i].getAttribute("data-name").toLowerCase();
+    var fhirId = rows[i].getAttribute("data-fhir-id").toLowerCase();
+
+    if (name.includes(filter) || fhirId.includes(filter)) {
+      rows[i].style.display = "";
+    } else {
+      rows[i].style.display = "none";
+    }
+  }
+}
+</script>
+{{end}}
+{{define "content"}}
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+  <h1 style="margin:0;">All Patients</h1>
+  <div class="text-muted" style="font-size:.9rem;">
+    EHR: <strong>{{.Session.EHRURL}}</strong>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">Synced Patients ({{len .Patients}})</div>
+  <p class="text-muted" style="margin-bottom:20px;">The following patients have been synced from the EHR during this or previous sessions.</p>
+
+  {{if .Patients}}
+  <div style="margin-bottom:16px;">
+    <input type="text" id="patientSearch" placeholder="Search by name or FHIR ID..."
+      style="padding:8px 12px;border:1px solid #ddd;border-radius:4px;width:100%;font-size:.9rem;"
+      onkeyup="filterPatients()">
+  </div>
+  <table class="fhir-table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Date of Birth</th>
+        <th>Gender</th>
+        <th>FHIR ID</th>
+        <th style="text-align:right;">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Patients}}
+      <tr class="patient-row" data-name="{{.FirstName}} {{.LastName}}" data-fhir-id="{{.FHIRID}}">
+        <td style="font-weight:600;">
+          {{if .FirstName}}{{.FirstName}} {{end}}
+          {{if .LastName}}{{.LastName}}{{end}}
+        </td>
+        <td>{{formatDate .DOB}}</td>
+        <td>{{titleCase .Gender}}</td>
+        <td class="text-muted">{{.FHIRID}}</td>
+        <td style="text-align:right;">
+          <a href="/dashboard?patient_id={{.FHIRID}}" class="btn btn-primary" style="padding:4px 10px;font-size:.75rem;text-decoration:none;">
+            View Dashboard
+          </a>
+        </td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <div style="text-align:center;padding:40px 0;">
+    <p class="text-muted">No patients have been synced yet.</p>
+  </div>
+  {{end}}
+</div>
+
+{{end}}

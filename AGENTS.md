@@ -77,7 +77,7 @@ import (
 - **Exported items:** `PascalCase`.
 - **Unexported items:** `camelCase`.
 - **Receiver names:** Use 1-3 letter abbreviations (e.g., `func (app *Application) ...`).
-- **Interfaces:** Usually end in `-er` (e.g., `FHIRClienter`).
+- **Interfaces:** Usually end in `-er` (e.g., `FHIRClient`).
 - **Variables:** Use short names for short-lived variables (`err`, `w`, `r`) and descriptive names for long-lived ones.
 
 ### Formatting
@@ -117,12 +117,18 @@ The application implements the SMART on FHIR launch flow. When modifying the lau
 - **Discovery:** Always use the `.well-known/smart-configuration` endpoint to find `authorization_endpoint` and `token_endpoint`.
 
 ### Security
-- **State Parameter:** Use the `state` parameter to maintain context and prevent CSRF attacks. The current implementation uses a simple hash-like string; improve this with cryptographically secure random values if refactoring for production.
+- **State Parameter:** Use the `state` parameter to maintain context and prevent CSRF attacks. The current implementation uses cryptographically secure random values via `crypto/rand` and stores launch context server-side in a short-lived in-memory map (expires after 10 minutes).
 - **Basic Auth:** Use `req.SetBasicAuth(clientID, clientSecret)` for the token exchange when required by the EHR.
 - **Bearer Tokens:** Always include the `Authorization: Bearer <token>` header when fetching FHIR resources.
 
 ### FHIR Resources
 - When fetching patient details, expect JSON and decode it into `map[string]interface{}` for flexibility, or define specific FHIR resource structs for better type safety.
+
+### Handler Implementation Notes
+- **Template Rendering:** Templates are parsed on every request (base.html + page.html) to avoid global template state conflicts. This is correct Go best practice.
+- **Handler HTTP Methods:** All handler methods check the request method explicitly. For example, `/dashboard/sync` accepts both GET (auto-sync on first load) and POST (manual sync from UI).
+- **State Store:** The in-memory state store in `launch.go` expires entries after 10 minutes and implements a 10-second grace period for duplicate requests.
+- **Middleware Chain:** The session middleware provides both hard-gate (`RequireSession`) and soft-load (`LoadSession`) middleware. Hard-gate routes redirect unauthenticated users to `/`, while soft-load routes allow unauthenticated access but attach session context if present.
 
 ---
 
@@ -132,24 +138,34 @@ The project is organised into modular packages under `/app`:
 - `/app/config`: Configuration structures and URL normalisation.
 - `/app/db`: SQLite storage, versioned migrations, and CRUD operations.
 - `/app/fhir`: FHIR R4 type definitions, SMART discovery, and FHIR client.
-- `/app/handlers`: HTTP handlers and per-render template logic.
-- `/app/middleware`: Session management and auth guards.
+- `/app/handlers`: HTTP handlers (launch.go, auth.go, dashboard.go, sync.go, logout.go, patients.go) and per-render template logic.
+- `/app/middleware`: Session management middleware (session loading, hard-gate protection).
 - `/app/models`: Core domain models and context keys.
-- `/app/templates`: Embedded HTML templates.
+- `/app/templates`: Embedded HTML templates (base.html, index.html, dashboard.html, patients.html, error.html).
 
 - `app/main.go`: Application entry point and dependency wiring.
 - `go.mod`: Go module definition (v1.24.0).
 
 ---
 
-## 5. Future Improvements for Agents
+## 5. Current Implementation Status
+The application has the following features implemented:
+- Full SMART on FHIR launch flow with OAuth2 code exchange
+- Session management with server-side state validation
+- FHIR resource sync for: Observations, Conditions, DocumentReferences, MedicationRequests, and AllergyIntolerances
+- SQLite storage with CRUD operations for all synced resources
+- Patient dashboard with clinical data display
+- Patient list view for browsing all synced patients
+
+## 6. Future Improvements for Agents
 When working in this repo, consider the following high-priority improvements:
-1. **Configuration Loading:** Implement a robust configuration loader for `app/main.go` (e.g., using `spf13/viper` or a YAML file).
-2. **Structured Logging:** Move from the standard `log` package to Go 1.21's `log/slog`.
-3. **Refresh Tokens:** Implement OAuth2 refresh token logic to maintain long-lived sessions.
-4. **FHIR Resources:** Add support for additional resources like Observations, Conditions, and Encounters.
-5. **Frontend:** Evolve the current templates into a more dynamic UI (e.g., using HTMX or a modern JS framework if appropriate).
-6. **FHIR Types:** Consider using a comprehensive FHIR library (e.g., `google/fhir/go`) for type-safe resource handling as the scope grows.
+1. **Configuration Loading:** Implement a robust configuration loader for `app/main.go` (e.g., using `spf13/viper` or environment variables).
+2. **Structured Logging:** Move from the standard `log` package to Go 1.21's `log/slog` for better performance and structured logging.
+3. **Refresh Tokens:** Implement OAuth2 refresh token logic to maintain long-lived sessions without requiring re-authentication.
+4. **Additional FHIR Resources:** Add support for more resources like Encounters, Procedures, Immunizations, etc.
+5. **Frontend Enhancement:** Evolve the current templates into a more dynamic UI with better interactivity (e.g., using HTMX, htmx+ forms, or a modern JS framework if appropriate).
+6. **FHIR Type Safety:** Consider using a comprehensive FHIR library (e.g., `google/fhir/go`) for type-safe resource handling as the scope grows.
+7. **Testing:** Add comprehensive handler and integration tests to complement the existing db and fhir package tests.
 
 ---
 *Created by AI Agent. Updated Feb 2026.*

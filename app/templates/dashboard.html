@@ -1,6 +1,7 @@
 {{template "base.html" .}}
 
 {{define "nav"}}
+  <a href="/patients">All Patients</a>
   <a href="/">Home</a>
   <form action="/logout" method="POST" style="display:inline">
     <button class="btn btn-danger" type="submit" style="padding:6px 12px;font-size:.875rem;">Logout</button>
@@ -8,6 +9,19 @@
 {{end}}
 
 {{define "content"}}
+
+{{/* ---- Success Flash Message ---- */}}
+{{if .Synced}}
+<div class="card" style="background-color:#d4edda;border-left:4px solid #28a745;margin-bottom:16px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;">
+    <div>
+      <strong>✓ Sync complete</strong>
+      <span style="font-size:.875rem;color:#555;">Data has been refreshed from the EHR.</span>
+    </div>
+    <button onclick="this.parentElement.style.display='none';" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:#666;">&times;</button>
+  </div>
+</div>
+{{end}}
 
 {{/* ---- Practitioner block ---- */}}
 {{if .Practitioner}}
@@ -101,6 +115,25 @@
   </div>
 </div>
 
+{{/* ---- High-Criticality Allergy Warning Card ---- */}}
+{{if hasCriticalAllergies .Allergies}}
+<div class="card" style="border-left:4px solid #dc3545;">
+  <div style="display:flex;align-items:flex-start;gap:12px;">
+    <span style="font-size:1.5rem;">⚠</span>
+    <div>
+      <strong style="color:#dc3545;">High-Criticality Allergies Detected</strong>
+      <p style="margin-top:4px;margin-bottom:0;font-size:.875rem;color:#555;">
+        {{range .Allergies}}
+          {{if eq .Criticality "high"}}
+            <strong>{{.CodeText}}</strong> ({{.ClinicalStatus}}){{if ne .CodeText (last .Allergies).CodeText}}<br/>{{end}}
+          {{end}}
+        {{end}}
+      </p>
+    </div>
+  </div>
+</div>
+{{end}}
+
 {{/* ---- Clinical Data block ---- */}}
 <div class="card">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
@@ -109,14 +142,12 @@
       {{if .LatestSync}}
       <span class="text-muted" style="font-size:.8rem;">
         Last synced: {{formatDateTime .LatestSync.SyncedAt}}
-        &nbsp;&middot;&nbsp;
-        {{.LatestSync.ObsCount}} obs &middot; {{.LatestSync.CondCount}} cond &middot; {{.LatestSync.DocCount}} docs
       </span>
       {{else}}
       <span class="text-muted" style="font-size:.8rem;">Never synced</span>
       {{end}}
-      <form action="/dashboard/sync" method="POST" style="display:inline;">
-        <button class="btn btn-primary" type="submit" style="padding:6px 14px;font-size:.875rem;">
+      <form action="/dashboard/sync?patient_id={{.Patient.FHIRID}}" method="POST" style="display:inline;">
+        <button class="btn btn-primary" type="submit" style="padding:6px 14px;font-size:.875rem;" id="syncBtn" onclick="onSyncClick()">
           &#x21bb;&nbsp;Sync with EHR
         </button>
       </form>
@@ -124,49 +155,75 @@
   </div>
 
   <div class="tabs">
-    <button class="tab-link active" onclick="openTab(event, 'observations')">Observations ({{len .Observations}})</button>
+    <button class="tab-link active" onclick="openTab(event, 'observations')">Vitals & Labs ({{len .Observations}})</button>
     <button class="tab-link" onclick="openTab(event, 'conditions')">Conditions ({{len .Conditions}})</button>
+    <button class="tab-link" onclick="openTab(event, 'medications')">Medications ({{len .Medications}})</button>
+    <button class="tab-link" onclick="openTab(event, 'allergies')">Allergies ({{len .Allergies}})</button>
     <button class="tab-link" onclick="openTab(event, 'notes')">Clinical Notes ({{len .DocumentReferences}})</button>
-    <button class="tab-link" onclick="openTab(event, 'smart')">SMART Inspector</button>
   </div>
 
+  {{/* ---- Observations Tab (Grouped by Category) ---- */}}
   <div id="observations" class="tab-content" style="display:block;">
     {{if .Observations}}
-    <table class="fhir-table">
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Code</th>
-          <th>Value</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{range .Observations}}
-        <tr>
-          <td>{{orDash .EffectiveDate}}</td>
-          <td>{{orDash .CodeText}}</td>
-          <td>
-            {{if .ValueQuantity}}
-              {{printf "%.4g" (derefFloat64 .ValueQuantity)}} {{.ValueUnit}}
-            {{else if .ValueString}}
-              {{.ValueString}}
-            {{else}}
-              —
-            {{end}}
-          </td>
-          <td><span class="badge badge-outline">{{.Status}}</span></td>
-        </tr>
-        {{end}}
-      </tbody>
-    </table>
+    {{range $cat, $obs := groupByCategory .Observations}}
+    <div style="margin-bottom:20px;">
+      <h4 style="margin-bottom:12px;color:#333;">{{titleCase $cat}}</h4>
+      <table class="fhir-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Code</th>
+            <th>Value</th>
+            <th style="width:60px;">Interpretation</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{range $obs}}
+          <tr>
+            <td>{{orDash .EffectiveDate}}</td>
+            <td>{{orDash .CodeText}}</td>
+            <td>
+              {{if .ValueQuantity}}
+                {{printf "%.4g" (derefFloat64 .ValueQuantity)}} {{.ValueUnit}}
+                {{if or .ReferenceRangeLow .ReferenceRangeHigh}}
+                  <br/><span style="font-size:.8rem;color:#666;">
+                    [{{if .ReferenceRangeLow}}{{printf "%.4g" (derefFloat64 .ReferenceRangeLow)}}{{else}}—{{end}}–{{if .ReferenceRangeHigh}}{{printf "%.4g" (derefFloat64 .ReferenceRangeHigh)}}{{else}}—{{end}}]
+                  </span>
+                {{end}}
+              {{else if .ValueString}}
+                {{.ValueString}}
+              {{else}}
+                —
+              {{end}}
+            </td>
+            <td>
+              {{if .Interpretation}}
+                <span class="badge" style="font-size:.75rem;background:#e3f2fd;color:#1976d2;">{{.Interpretation}}</span>
+              {{else}}
+                —
+              {{end}}
+            </td>
+            <td><span class="badge badge-outline">{{.Status}}</span></td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+    {{end}}
     {{else}}
     <p class="text-muted mt-4">No observations found. Use "Sync with EHR" to pull data.</p>
     {{end}}
   </div>
 
+  {{/* ---- Conditions Tab (with filter bar) ---- */}}
   <div id="conditions" class="tab-content" style="display:none;">
     {{if .Conditions}}
+    <div style="margin-bottom:12px;display:flex;gap:8px;">
+      <button onclick="filterConditions('all')" class="btn btn-outline" style="padding:6px 12px;font-size:.85rem;">All</button>
+      <button onclick="filterConditions('active')" class="btn btn-outline" style="padding:6px 12px;font-size:.85rem;">Active</button>
+      <button onclick="filterConditions('resolved')" class="btn btn-outline" style="padding:6px 12px;font-size:.85rem;">Resolved</button>
+    </div>
     <table class="fhir-table">
       <thead>
         <tr>
@@ -178,7 +235,7 @@
       </thead>
       <tbody>
         {{range .Conditions}}
-        <tr>
+        <tr class="condition-row" data-status="{{.ClinicalStatus}}">
           <td>{{orDash .RecordedDate}}</td>
           <td>{{orDash .CodeText}}</td>
           <td>{{titleCase .ClinicalStatus}}</td>
@@ -192,6 +249,75 @@
     {{end}}
   </div>
 
+  {{/* ---- Medications Tab ---- */}}
+  <div id="medications" class="tab-content" style="display:none;">
+    {{if .Medications}}
+    <table class="fhir-table">
+      <thead>
+        <tr>
+          <th>Authored On</th>
+          <th>Medication</th>
+          <th>Dosage</th>
+          <th>Status</th>
+          <th>Requester</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Medications}}
+        <tr>
+          <td>{{orDash .AuthoredOn}}</td>
+          <td>{{orDash .MedCodeText}}</td>
+          <td>{{orDash .DosageText}}</td>
+          <td><span class="badge badge-outline">{{.Status}}</span></td>
+          <td>{{orDash .RequesterDisplay}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="text-muted mt-4">No medications found. Use "Sync with EHR" to pull data.</p>
+    {{end}}
+  </div>
+
+  {{/* ---- Allergies Tab ---- */}}
+  <div id="allergies" class="tab-content" style="display:none;">
+    {{if .Allergies}}
+    <table class="fhir-table">
+      <thead>
+        <tr>
+          <th>Recorded Date</th>
+          <th>Allergen</th>
+          <th>Type</th>
+          <th>Criticality</th>
+          <th>Clinical Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .Allergies}}
+        <tr>
+          <td>{{orDash .RecordedDate}}</td>
+          <td>{{orDash .CodeText}}</td>
+          <td>{{titleCase .Type}}</td>
+          <td>
+            {{if eq .Criticality "high"}}
+              <span class="badge" style="background:#dc3545;color:white;">{{.Criticality}}</span>
+            {{else if eq .Criticality "medium"}}
+              <span class="badge" style="background:#ffc107;color:#000;">{{.Criticality}}</span>
+            {{else}}
+              <span class="badge badge-outline">{{orDash .Criticality}}</span>
+            {{end}}
+          </td>
+          <td>{{titleCase .ClinicalStatus}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}
+    <p class="text-muted mt-4">No allergies found. Use "Sync with EHR" to pull data.</p>
+    {{end}}
+  </div>
+
+  {{/* ---- Clinical Notes Tab ---- */}}
   <div id="notes" class="tab-content" style="display:none;">
     {{if .DocumentReferences}}
     <table class="fhir-table">
@@ -228,8 +354,14 @@
     <p class="text-muted mt-4">No clinical notes found. Use "Sync with EHR" to pull data.</p>
     {{end}}
   </div>
+</div>
 
-  <div id="smart" class="tab-content" style="display:none;">
+{{/* ---- SMART Inspector Accordion ---- */}}
+<details style="margin-bottom:20px;">
+  <summary style="cursor:pointer; font-size:.875rem; font-weight:600; color:var(--color-primary); padding:8px 0;">
+    SMART Inspector
+  </summary>
+  <div class="card" style="margin-top:8px;">
     <div class="mt-4">
       <div class="detail-item mb-4">
         <label>FHIR Base URL (ISS)</label>
@@ -251,7 +383,7 @@
       {{end}}
     </div>
   </div>
-</div>
+</details>
 
 {{/* ---- Raw FHIR resource accordion ---- */}}
 {{if .RawPatient}}
@@ -330,6 +462,24 @@ function openTab(evt, tabName) {
   }
   document.getElementById(tabName).style.display = "block";
   evt.currentTarget.className += " active";
+}
+
+function filterConditions(status) {
+  var rows = document.getElementsByClassName("condition-row");
+  for (var i = 0; i < rows.length; i++) {
+    var rowStatus = rows[i].getAttribute("data-status");
+    if (status === "all" || rowStatus === status) {
+      rows[i].style.display = "";
+    } else {
+      rows[i].style.display = "none";
+    }
+  }
+}
+
+function onSyncClick() {
+  var btn = document.getElementById("syncBtn");
+  btn.disabled = true;
+  btn.textContent = "Syncing\u2026";
 }
 </script>
 {{end}}

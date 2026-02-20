@@ -96,6 +96,7 @@ func main() {
 	// Session-required routes — wrapped with the hard-gate middleware.
 	mux.Handle("/dashboard", sessionMW.RequireSession(http.HandlerFunc(h.HandleDashboard)))
 	mux.Handle("/dashboard/sync", sessionMW.RequireSession(http.HandlerFunc(h.HandleSync)))
+	mux.Handle("/patients", sessionMW.RequireSession(http.HandlerFunc(h.HandlePatients)))
 	mux.Handle("/logout", sessionMW.RequireSession(http.HandlerFunc(h.HandleLogout)))
 
 	// Apply the soft session loader to every request so templates can always

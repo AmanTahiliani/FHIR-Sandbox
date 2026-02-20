@@ -10,7 +10,8 @@ import (
 )
 
 // HandleDashboard renders the stable patient dashboard.
-// All clinical data is read from the local database; no live FHIR calls are
+// On first load (no prior sync), automatically triggers a sync to populate data.
+// All other clinical data is read from the local database; no live FHIR calls are
 // made here. Use POST /dashboard/sync to refresh data from the EHR.
 //
 // GET /dashboard
@@ -25,6 +26,27 @@ func (h *Handler) HandleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	ehrURL := sess.EHRURL
 	patientID := sess.PatientFHIRID
+
+	// Allow overriding the patient context via a query parameter.
+	if overrideID := r.URL.Query().Get("patient_id"); overrideID != "" {
+		patientID = overrideID
+	}
+
+	// Check if this is the first load and trigger auto-sync
+	latestSync, err := h.store.LatestSync(patientID, ehrURL)
+	if err != nil {
+		log.Printf("handlers: dashboard LatestSync Patient/%s: %v", patientID, err)
+	}
+
+	if latestSync == nil {
+		// First load — redirect to sync endpoint for auto-sync
+		syncURL := "/dashboard/sync"
+		if overrideID := r.URL.Query().Get("patient_id"); overrideID != "" {
+			syncURL += "?patient_id=" + overrideID
+		}
+		http.Redirect(w, r, syncURL, http.StatusSeeOther)
+		return
+	}
 
 	// Fetch patient demographics from the FHIR server. This is a cheap single
 	// resource call and keeps the patient card always current.
@@ -54,10 +76,17 @@ func (h *Handler) HandleDashboard(w http.ResponseWriter, r *http.Request) {
 		log.Printf("handlers: dashboard ListDocumentReferences Patient/%s: %v", patientID, err)
 	}
 
-	latestSync, err := h.store.LatestSync(patientID, ehrURL)
+	medications, err := h.store.ListMedicationRequests(patientID, ehrURL)
 	if err != nil {
-		log.Printf("handlers: dashboard LatestSync Patient/%s: %v", patientID, err)
+		log.Printf("handlers: dashboard ListMedicationRequests Patient/%s: %v", patientID, err)
 	}
+
+	allergies, err := h.store.ListAllergyIntolerances(patientID, ehrURL)
+	if err != nil {
+		log.Printf("handlers: dashboard ListAllergyIntolerances Patient/%s: %v", patientID, err)
+	}
+
+	synced := r.URL.Query().Get("synced") == "true"
 
 	h.render(w, "dashboard.html", dashboardData{
 		Patient:            patientUser,
@@ -66,8 +95,11 @@ func (h *Handler) HandleDashboard(w http.ResponseWriter, r *http.Request) {
 		Observations:       observations,
 		Conditions:         conditions,
 		DocumentReferences: docRefs,
+		Medications:        medications,
+		Allergies:          allergies,
 		LatestSync:         latestSync,
 		Session:            sess,
+		Synced:             synced,
 	})
 }
 
@@ -79,8 +111,11 @@ type dashboardData struct {
 	Observations       []models.Observation
 	Conditions         []models.Condition
 	DocumentReferences []models.DocumentReference
+	Medications        []models.MedicationRequest
+	Allergies          []models.AllergyIntolerance
 	LatestSync         *models.PatientSync
 	Session            *models.Session
+	Synced             bool
 }
 
 // handleUnauthorized redirects to root for dashboard requests.
