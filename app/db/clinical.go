@@ -401,22 +401,25 @@ func (s *Store) UpsertAllergyIntolerance(a *models.AllergyIntolerance) (string, 
 	if err == nil {
 		_, err = s.db.Exec(`
 			UPDATE allergy_intolerances SET
-				patient_fhir_id     = ?,
-				clinical_status     = ?,
-				verification_status = ?,
-				type                = ?,
-				category            = ?,
-				criticality         = ?,
-				code_text           = ?,
-				code_system         = ?,
-				code_code           = ?,
-				recorded_date       = ?,
-				synced_at           = ?
+				patient_fhir_id        = ?,
+				clinical_status        = ?,
+				verification_status    = ?,
+				type                   = ?,
+				category               = ?,
+				criticality            = ?,
+				code_text              = ?,
+				code_system            = ?,
+				code_code              = ?,
+				recorded_date          = ?,
+				reaction_severity      = ?,
+				reaction_manifestation = ?,
+				synced_at              = ?
 			WHERE id = ?`,
 			a.PatientFHIRID, a.ClinicalStatus, a.VerificationStatus,
 			a.Type, a.Category, a.Criticality,
 			a.CodeText, a.CodeSystem, a.CodeCode,
-			a.RecordedDate, now, existingID,
+			a.RecordedDate, a.ReactionSeverity, a.ReactionManifestation,
+			now, existingID,
 		)
 		if err != nil {
 			return "", fmt.Errorf("db: update allergy_intolerance %s: %w", existingID, err)
@@ -429,11 +432,13 @@ func (s *Store) UpsertAllergyIntolerance(a *models.AllergyIntolerance) (string, 
 		INSERT INTO allergy_intolerances (
 			id, fhir_id, ehr_url, patient_fhir_id,
 			clinical_status, verification_status, type, category, criticality,
-			code_text, code_system, code_code, recorded_date, synced_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			code_text, code_system, code_code, recorded_date,
+			reaction_severity, reaction_manifestation, synced_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, a.FHIRID, a.EHRURL, a.PatientFHIRID,
 		a.ClinicalStatus, a.VerificationStatus, a.Type, a.Category, a.Criticality,
-		a.CodeText, a.CodeSystem, a.CodeCode, a.RecordedDate, now,
+		a.CodeText, a.CodeSystem, a.CodeCode, a.RecordedDate,
+		a.ReactionSeverity, a.ReactionManifestation, now,
 	)
 	if err != nil {
 		return "", fmt.Errorf("db: insert allergy_intolerance fhir_id=%s: %w", a.FHIRID, err)
@@ -446,7 +451,8 @@ func (s *Store) ListAllergyIntolerances(patientFHIRID, ehrURL string) ([]models.
 	rows, err := s.db.Query(`
 		SELECT id, fhir_id, ehr_url, patient_fhir_id,
 		       clinical_status, verification_status, type, category, criticality,
-		       code_text, code_system, code_code, recorded_date, synced_at
+		       code_text, code_system, code_code, recorded_date,
+		       reaction_severity, reaction_manifestation, synced_at
 		FROM allergy_intolerances
 		WHERE patient_fhir_id = ? AND ehr_url = ?
 		ORDER BY recorded_date DESC`,
@@ -463,11 +469,268 @@ func (s *Store) ListAllergyIntolerances(patientFHIRID, ehrURL string) ([]models.
 		if err := rows.Scan(
 			&a.ID, &a.FHIRID, &a.EHRURL, &a.PatientFHIRID,
 			&a.ClinicalStatus, &a.VerificationStatus, &a.Type, &a.Category, &a.Criticality,
-			&a.CodeText, &a.CodeSystem, &a.CodeCode, &a.RecordedDate, &a.SyncedAt,
+			&a.CodeText, &a.CodeSystem, &a.CodeCode, &a.RecordedDate,
+			&a.ReactionSeverity, &a.ReactionManifestation, &a.SyncedAt,
 		); err != nil {
 			return nil, fmt.Errorf("db: scan allergy_intolerance: %w", err)
 		}
 		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// ---------------------------------------------------------------------------
+// Immunization
+// ---------------------------------------------------------------------------
+
+// UpsertImmunization inserts or updates an Immunization record keyed on (fhir_id, ehr_url).
+func (s *Store) UpsertImmunization(imm *models.Immunization) (string, error) {
+	now := time.Now().UTC()
+
+	var existingID string
+	err := s.db.QueryRow(
+		`SELECT id FROM immunizations WHERE fhir_id = ? AND ehr_url = ?`,
+		imm.FHIRID, imm.EHRURL,
+	).Scan(&existingID)
+
+	if err == nil {
+		_, err = s.db.Exec(`
+			UPDATE immunizations SET
+				patient_fhir_id = ?,
+				status          = ?,
+				vaccine_text    = ?,
+				vaccine_system  = ?,
+				vaccine_code    = ?,
+				occurrence_date = ?,
+				primary_source  = ?,
+				lot_number      = ?,
+				synced_at       = ?
+			WHERE id = ?`,
+			imm.PatientFHIRID, imm.Status,
+			imm.VaccineText, imm.VaccineSystem, imm.VaccineCode,
+			imm.OccurrenceDate, imm.PrimarySource, imm.LotNumber,
+			now, existingID,
+		)
+		if err != nil {
+			return "", fmt.Errorf("db: update immunization %s: %w", existingID, err)
+		}
+		return existingID, nil
+	}
+
+	id := uuid.NewString()
+	_, err = s.db.Exec(`
+		INSERT INTO immunizations (
+			id, fhir_id, ehr_url, patient_fhir_id,
+			status, vaccine_text, vaccine_system, vaccine_code,
+			occurrence_date, primary_source, lot_number, synced_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, imm.FHIRID, imm.EHRURL, imm.PatientFHIRID,
+		imm.Status, imm.VaccineText, imm.VaccineSystem, imm.VaccineCode,
+		imm.OccurrenceDate, imm.PrimarySource, imm.LotNumber, now,
+	)
+	if err != nil {
+		return "", fmt.Errorf("db: insert immunization fhir_id=%s: %w", imm.FHIRID, err)
+	}
+	return id, nil
+}
+
+// ListImmunizations returns all Immunizations for the given patient, newest first.
+func (s *Store) ListImmunizations(patientFHIRID, ehrURL string) ([]models.Immunization, error) {
+	rows, err := s.db.Query(`
+		SELECT id, fhir_id, ehr_url, patient_fhir_id,
+		       status, vaccine_text, vaccine_system, vaccine_code,
+		       occurrence_date, primary_source, lot_number, synced_at
+		FROM immunizations
+		WHERE patient_fhir_id = ? AND ehr_url = ?
+		ORDER BY occurrence_date DESC`,
+		patientFHIRID, ehrURL,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("db: list immunizations: %w", err)
+	}
+	defer rows.Close()
+
+	var out []models.Immunization
+	for rows.Next() {
+		var imm models.Immunization
+		if err := rows.Scan(
+			&imm.ID, &imm.FHIRID, &imm.EHRURL, &imm.PatientFHIRID,
+			&imm.Status, &imm.VaccineText, &imm.VaccineSystem, &imm.VaccineCode,
+			&imm.OccurrenceDate, &imm.PrimarySource, &imm.LotNumber, &imm.SyncedAt,
+		); err != nil {
+			return nil, fmt.Errorf("db: scan immunization: %w", err)
+		}
+		out = append(out, imm)
+	}
+	return out, rows.Err()
+}
+
+// ---------------------------------------------------------------------------
+// Procedure
+// ---------------------------------------------------------------------------
+
+// UpsertProcedure inserts or updates a Procedure record keyed on (fhir_id, ehr_url).
+func (s *Store) UpsertProcedure(p *models.Procedure) (string, error) {
+	now := time.Now().UTC()
+
+	var existingID string
+	err := s.db.QueryRow(
+		`SELECT id FROM procedures WHERE fhir_id = ? AND ehr_url = ?`,
+		p.FHIRID, p.EHRURL,
+	).Scan(&existingID)
+
+	if err == nil {
+		_, err = s.db.Exec(`
+			UPDATE procedures SET
+				patient_fhir_id = ?,
+				status          = ?,
+				code_text       = ?,
+				code_system     = ?,
+				code_code       = ?,
+				performed_date  = ?,
+				reason_text     = ?,
+				outcome         = ?,
+				synced_at       = ?
+			WHERE id = ?`,
+			p.PatientFHIRID, p.Status,
+			p.CodeText, p.CodeSystem, p.CodeCode,
+			p.PerformedDate, p.ReasonText, p.Outcome,
+			now, existingID,
+		)
+		if err != nil {
+			return "", fmt.Errorf("db: update procedure %s: %w", existingID, err)
+		}
+		return existingID, nil
+	}
+
+	id := uuid.NewString()
+	_, err = s.db.Exec(`
+		INSERT INTO procedures (
+			id, fhir_id, ehr_url, patient_fhir_id,
+			status, code_text, code_system, code_code,
+			performed_date, reason_text, outcome, synced_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, p.FHIRID, p.EHRURL, p.PatientFHIRID,
+		p.Status, p.CodeText, p.CodeSystem, p.CodeCode,
+		p.PerformedDate, p.ReasonText, p.Outcome, now,
+	)
+	if err != nil {
+		return "", fmt.Errorf("db: insert procedure fhir_id=%s: %w", p.FHIRID, err)
+	}
+	return id, nil
+}
+
+// ListProcedures returns all Procedures for the given patient, newest first.
+func (s *Store) ListProcedures(patientFHIRID, ehrURL string) ([]models.Procedure, error) {
+	rows, err := s.db.Query(`
+		SELECT id, fhir_id, ehr_url, patient_fhir_id,
+		       status, code_text, code_system, code_code,
+		       performed_date, reason_text, outcome, synced_at
+		FROM procedures
+		WHERE patient_fhir_id = ? AND ehr_url = ?
+		ORDER BY performed_date DESC`,
+		patientFHIRID, ehrURL,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("db: list procedures: %w", err)
+	}
+	defer rows.Close()
+
+	var out []models.Procedure
+	for rows.Next() {
+		var p models.Procedure
+		if err := rows.Scan(
+			&p.ID, &p.FHIRID, &p.EHRURL, &p.PatientFHIRID,
+			&p.Status, &p.CodeText, &p.CodeSystem, &p.CodeCode,
+			&p.PerformedDate, &p.ReasonText, &p.Outcome, &p.SyncedAt,
+		); err != nil {
+			return nil, fmt.Errorf("db: scan procedure: %w", err)
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// ---------------------------------------------------------------------------
+// Encounter
+// ---------------------------------------------------------------------------
+
+// UpsertEncounter inserts or updates an Encounter record keyed on (fhir_id, ehr_url).
+func (s *Store) UpsertEncounter(e *models.Encounter) (string, error) {
+	now := time.Now().UTC()
+
+	var existingID string
+	err := s.db.QueryRow(
+		`SELECT id FROM encounters WHERE fhir_id = ? AND ehr_url = ?`,
+		e.FHIRID, e.EHRURL,
+	).Scan(&existingID)
+
+	if err == nil {
+		_, err = s.db.Exec(`
+			UPDATE encounters SET
+				patient_fhir_id = ?,
+				status          = ?,
+				class           = ?,
+				type_text       = ?,
+				period_start    = ?,
+				period_end      = ?,
+				reason_text     = ?,
+				synced_at       = ?
+			WHERE id = ?`,
+			e.PatientFHIRID, e.Status, e.Class, e.TypeText,
+			e.PeriodStart, e.PeriodEnd, e.ReasonText,
+			now, existingID,
+		)
+		if err != nil {
+			return "", fmt.Errorf("db: update encounter %s: %w", existingID, err)
+		}
+		return existingID, nil
+	}
+
+	id := uuid.NewString()
+	_, err = s.db.Exec(`
+		INSERT INTO encounters (
+			id, fhir_id, ehr_url, patient_fhir_id,
+			status, class, type_text,
+			period_start, period_end, reason_text, synced_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, e.FHIRID, e.EHRURL, e.PatientFHIRID,
+		e.Status, e.Class, e.TypeText,
+		e.PeriodStart, e.PeriodEnd, e.ReasonText, now,
+	)
+	if err != nil {
+		return "", fmt.Errorf("db: insert encounter fhir_id=%s: %w", e.FHIRID, err)
+	}
+	return id, nil
+}
+
+// ListEncounters returns all Encounters for the given patient, newest first.
+func (s *Store) ListEncounters(patientFHIRID, ehrURL string) ([]models.Encounter, error) {
+	rows, err := s.db.Query(`
+		SELECT id, fhir_id, ehr_url, patient_fhir_id,
+		       status, class, type_text,
+		       period_start, period_end, reason_text, synced_at
+		FROM encounters
+		WHERE patient_fhir_id = ? AND ehr_url = ?
+		ORDER BY period_start DESC`,
+		patientFHIRID, ehrURL,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("db: list encounters: %w", err)
+	}
+	defer rows.Close()
+
+	var out []models.Encounter
+	for rows.Next() {
+		var e models.Encounter
+		if err := rows.Scan(
+			&e.ID, &e.FHIRID, &e.EHRURL, &e.PatientFHIRID,
+			&e.Status, &e.Class, &e.TypeText,
+			&e.PeriodStart, &e.PeriodEnd, &e.ReasonText, &e.SyncedAt,
+		); err != nil {
+			return nil, fmt.Errorf("db: scan encounter: %w", err)
+		}
+		out = append(out, e)
 	}
 	return out, rows.Err()
 }

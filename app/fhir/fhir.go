@@ -114,6 +114,16 @@ type Meta struct {
 // https://www.hl7.org/fhir/patient.html
 // ---------------------------------------------------------------------------
 
+// Extension represents the FHIR Extension data type (R4).
+// Extensions are used for US Core race/ethnicity and other modifiers.
+type Extension struct {
+	URL         string      `json:"url"`
+	ValueCode   string      `json:"valueCode,omitempty"`
+	ValueString string      `json:"valueString,omitempty"`
+	ValueCoding *Coding     `json:"valueCoding,omitempty"`
+	Extension   []Extension `json:"extension,omitempty"`
+}
+
 // Patient represents a FHIR R4 Patient resource.
 // Fields are a curated subset of the full specification — add new fields
 // here as the platform needs them, without breaking existing code.
@@ -129,6 +139,7 @@ type Patient struct {
 	BirthDate         string          `json:"birthDate"`
 	Address           []Address       `json:"address"`
 	MaritalStatus     CodeableConcept `json:"maritalStatus"`
+	Extension         []Extension     `json:"extension"`
 }
 
 // ResourceType implements the Resource interface.
@@ -275,22 +286,86 @@ type MedicationRequest struct {
 
 func (m *MedicationRequest) ResourceType() string { return "MedicationRequest" }
 
+// AllergyReaction represents a reaction event in a FHIR AllergyIntolerance.
+type AllergyReaction struct {
+	Manifestation []CodeableConcept `json:"manifestation"`
+	Severity      string            `json:"severity"` // mild | moderate | severe
+}
+
 // AllergyIntolerance represents a FHIR R4 AllergyIntolerance resource.
 // https://www.hl7.org/fhir/allergyintolerance.html
 type AllergyIntolerance struct {
-	ResourceTypeField  string          `json:"resourceType"`
-	ID                 string          `json:"id"`
-	ClinicalStatus     CodeableConcept `json:"clinicalStatus"`
-	VerificationStatus CodeableConcept `json:"verificationStatus"`
-	Type               string          `json:"type"`
-	Category           []string        `json:"category"`
-	Criticality        string          `json:"criticality"`
-	Code               CodeableConcept `json:"code"`
-	Patient            Reference       `json:"patient"`
-	RecordedDate       string          `json:"recordedDate"`
+	ResourceTypeField  string            `json:"resourceType"`
+	ID                 string            `json:"id"`
+	ClinicalStatus     CodeableConcept   `json:"clinicalStatus"`
+	VerificationStatus CodeableConcept   `json:"verificationStatus"`
+	Type               string            `json:"type"`
+	Category           []string          `json:"category"`
+	Criticality        string            `json:"criticality"`
+	Code               CodeableConcept   `json:"code"`
+	Patient            Reference         `json:"patient"`
+	RecordedDate       string            `json:"recordedDate"`
+	Reaction           []AllergyReaction `json:"reaction"`
 }
 
 func (a *AllergyIntolerance) ResourceType() string { return "AllergyIntolerance" }
+
+// Period represents the FHIR Period data type (R4).
+type Period struct {
+	Start string `json:"start"`
+	End   string `json:"end"`
+}
+
+// Immunization represents a FHIR R4 Immunization resource.
+// https://www.hl7.org/fhir/immunization.html
+type Immunization struct {
+	ResourceTypeField  string          `json:"resourceType"`
+	ID                 string          `json:"id"`
+	Status             string          `json:"status"`
+	VaccineCode        CodeableConcept `json:"vaccineCode"`
+	Patient            Reference       `json:"patient"`
+	OccurrenceDateTime string          `json:"occurrenceDateTime"`
+	PrimarySource      bool            `json:"primarySource"`
+	LotNumber          string          `json:"lotNumber"`
+}
+
+func (i *Immunization) ResourceType() string { return "Immunization" }
+
+// Procedure represents a FHIR R4 Procedure resource.
+// https://www.hl7.org/fhir/procedure.html
+type Procedure struct {
+	ResourceTypeField string            `json:"resourceType"`
+	ID                string            `json:"id"`
+	Status            string            `json:"status"`
+	Code              CodeableConcept   `json:"code"`
+	Subject           Reference         `json:"subject"`
+	PerformedDateTime string            `json:"performedDateTime"`
+	PerformedPeriod   *Period           `json:"performedPeriod,omitempty"`
+	ReasonCode        []CodeableConcept `json:"reasonCode"`
+	Outcome           CodeableConcept   `json:"outcome"`
+}
+
+func (p *Procedure) ResourceType() string { return "Procedure" }
+
+// EncounterClass represents the coded class of an Encounter (V3 ActCode).
+type EncounterClass struct {
+	Code string `json:"code"`
+}
+
+// Encounter represents a FHIR R4 Encounter resource.
+// https://www.hl7.org/fhir/encounter.html
+type Encounter struct {
+	ResourceTypeField string            `json:"resourceType"`
+	ID                string            `json:"id"`
+	Status            string            `json:"status"`
+	Class             EncounterClass    `json:"class"`
+	Type              []CodeableConcept `json:"type"`
+	Subject           Reference         `json:"subject"`
+	Period            *Period           `json:"period,omitempty"`
+	ReasonCode        []CodeableConcept `json:"reasonCode"`
+}
+
+func (e *Encounter) ResourceType() string { return "Encounter" }
 
 // Quantity represents the FHIR Quantity data type.
 type Quantity struct {
@@ -565,7 +640,7 @@ func (c *Client) GetDocumentReferences(patientID, since string) ([]DocumentRefer
 // If since is non-empty, only fetches requests modified after that timestamp (RFC3339).
 func (c *Client) GetMedicationRequests(patientID, since string) ([]MedicationRequest, error) {
 	var bundle Bundle
-	path := fmt.Sprintf("MedicationRequest?patient=%s&status=active&_sort=-date", patientID)
+	path := fmt.Sprintf("MedicationRequest?patient=%s&_sort=-date", patientID)
 	if since != "" {
 		path += fmt.Sprintf("&_lastUpdated=ge%s", since)
 	}
@@ -613,6 +688,87 @@ func (c *Client) GetAllergyIntolerances(patientID, since string) ([]AllergyIntol
 		}
 	}
 	return allergies, nil
+}
+
+// GetImmunizations fetches Immunization resources for a specific patient.
+// If since is non-empty, only fetches immunizations modified after that timestamp (RFC3339).
+func (c *Client) GetImmunizations(patientID, since string) ([]Immunization, error) {
+	var bundle Bundle
+	path := fmt.Sprintf("Immunization?patient=%s&_sort=-date", patientID)
+	if since != "" {
+		path += fmt.Sprintf("&_lastUpdated=ge%s", since)
+	}
+	if err := c.get(path, &bundle); err != nil {
+		return nil, err
+	}
+
+	entries, err := c.fetchAllBundlePages(&bundle, 10)
+	if err != nil {
+		return nil, err
+	}
+
+	var immunizations []Immunization
+	for _, entry := range entries {
+		var imm Immunization
+		if err := json.Unmarshal(entry, &imm); err == nil {
+			immunizations = append(immunizations, imm)
+		}
+	}
+	return immunizations, nil
+}
+
+// GetProcedures fetches Procedure resources for a specific patient.
+// If since is non-empty, only fetches procedures modified after that timestamp (RFC3339).
+func (c *Client) GetProcedures(patientID, since string) ([]Procedure, error) {
+	var bundle Bundle
+	path := fmt.Sprintf("Procedure?patient=%s&_sort=-date", patientID)
+	if since != "" {
+		path += fmt.Sprintf("&_lastUpdated=ge%s", since)
+	}
+	if err := c.get(path, &bundle); err != nil {
+		return nil, err
+	}
+
+	entries, err := c.fetchAllBundlePages(&bundle, 10)
+	if err != nil {
+		return nil, err
+	}
+
+	var procedures []Procedure
+	for _, entry := range entries {
+		var p Procedure
+		if err := json.Unmarshal(entry, &p); err == nil {
+			procedures = append(procedures, p)
+		}
+	}
+	return procedures, nil
+}
+
+// GetEncounters fetches Encounter resources for a specific patient.
+// If since is non-empty, only fetches encounters modified after that timestamp (RFC3339).
+func (c *Client) GetEncounters(patientID, since string) ([]Encounter, error) {
+	var bundle Bundle
+	path := fmt.Sprintf("Encounter?patient=%s&_sort=-date", patientID)
+	if since != "" {
+		path += fmt.Sprintf("&_lastUpdated=ge%s", since)
+	}
+	if err := c.get(path, &bundle); err != nil {
+		return nil, err
+	}
+
+	entries, err := c.fetchAllBundlePages(&bundle, 10)
+	if err != nil {
+		return nil, err
+	}
+
+	var encounters []Encounter
+	for _, entry := range entries {
+		var e Encounter
+		if err := json.Unmarshal(entry, &e); err == nil {
+			encounters = append(encounters, e)
+		}
+	}
+	return encounters, nil
 }
 
 // GetSmartConfiguration fetches and parses the SMART discovery document
@@ -665,6 +821,30 @@ func primaryEmail(telecom []ContactPoint) string {
 	return ""
 }
 
+// extractMRN attempts to find a Medical Record Number in a FHIR Identifier slice.
+// It looks for identifiers with a system containing "mrn" or the first identifier
+// if none specifically match.
+func extractMRN(identifiers []Identifier) string {
+	for _, id := range identifiers {
+		// Look for common MRN system patterns
+		system := strings.ToLower(id.System)
+		if strings.Contains(system, "mrn") || strings.Contains(system, "medical-record") {
+			return id.Value
+		}
+		// Also check the type code if present
+		for _, coding := range id.Type.Coding {
+			if strings.ToUpper(coding.Code) == "MR" {
+				return id.Value
+			}
+		}
+	}
+	// Fallback to the first identifier if we haven't found a definitive MRN
+	if len(identifiers) > 0 {
+		return identifiers[0].Value
+	}
+	return ""
+}
+
 // ExtractUserFromPatient converts a FHIR Patient resource into a platform
 // models.User with Role=RolePatient. The ehrURL is the originating FHIR
 // server base URL.
@@ -685,6 +865,7 @@ func ExtractUserFromPatient(p *Patient, ehrURL string) *models.User {
 		FirstName:        first,
 		MiddleName:       middle,
 		LastName:         name.Family,
+		MRN:              extractMRN(p.Identifier),
 		DOB:              p.BirthDate,
 		Gender:           p.Gender,
 		Email:            primaryEmail(p.Telecom),
@@ -745,6 +926,20 @@ func firstCategoryText(cats []CodeableConcept) string {
 		return c.Coding[0].Code
 	}
 	return ""
+}
+
+// firstCategoryCode returns the first coding code of the first element in a
+// []CodeableConcept. Preferred over firstCategoryText when machine-readable
+// values (e.g. "problem-list-item", "vital-signs") are needed for filtering.
+func firstCategoryCode(cats []CodeableConcept) string {
+	if len(cats) == 0 {
+		return ""
+	}
+	c := cats[0]
+	if len(c.Coding) > 0 && c.Coding[0].Code != "" {
+		return c.Coding[0].Code
+	}
+	return c.Text
 }
 
 // ExtractObservation maps a FHIR Observation to a models.Observation ready
@@ -830,6 +1025,8 @@ func ExtractObservation(o *Observation, patientFHIRID, ehrURL string) *models.Ob
 }
 
 // ExtractCondition maps a FHIR Condition to a models.Condition ready for upsert.
+// Category is stored as a machine-readable code (e.g. "problem-list-item",
+// "encounter-diagnosis") for reliable client-side filtering.
 func ExtractCondition(c *Condition, patientFHIRID, ehrURL string) *models.Condition {
 	coding := firstCoding(c.Code)
 	clinicalStatus := firstCoding(c.ClinicalStatus)
@@ -840,7 +1037,7 @@ func ExtractCondition(c *Condition, patientFHIRID, ehrURL string) *models.Condit
 		PatientFHIRID:      patientFHIRID,
 		ClinicalStatus:     clinicalStatus.Code,
 		VerificationStatus: verificationStatus.Code,
-		Category:           firstCategoryText(c.Category),
+		Category:           firstCategoryCode(c.Category),
 		CodeText:           c.Code.Text,
 		CodeSystem:         coding.System,
 		CodeCode:           coding.Code,
@@ -913,20 +1110,178 @@ func ExtractAllergyIntolerance(a *AllergyIntolerance, patientFHIRID, ehrURL stri
 	if len(a.Category) > 0 {
 		category = a.Category[0]
 	}
-	return &models.AllergyIntolerance{
-		FHIRID:             a.ID,
-		EHRURL:             strings.TrimRight(ehrURL, "/"),
-		PatientFHIRID:      patientFHIRID,
-		ClinicalStatus:     clinicalStatus.Code,
-		VerificationStatus: verificationStatus.Code,
-		Type:               a.Type,
-		Category:           category,
-		Criticality:        a.Criticality,
-		CodeText:           a.Code.Text,
-		CodeSystem:         codeCoding.System,
-		CodeCode:           codeCoding.Code,
-		RecordedDate:       a.RecordedDate,
+
+	// Extract first reaction severity and manifestation for safety display.
+	var reactionSeverity, reactionManifestation string
+	if len(a.Reaction) > 0 {
+		rxn := a.Reaction[0]
+		reactionSeverity = rxn.Severity
+		if len(rxn.Manifestation) > 0 {
+			m := rxn.Manifestation[0]
+			if m.Text != "" {
+				reactionManifestation = m.Text
+			} else if len(m.Coding) > 0 {
+				if m.Coding[0].Display != "" {
+					reactionManifestation = m.Coding[0].Display
+				} else {
+					reactionManifestation = m.Coding[0].Code
+				}
+			}
+		}
 	}
+
+	return &models.AllergyIntolerance{
+		FHIRID:                a.ID,
+		EHRURL:                strings.TrimRight(ehrURL, "/"),
+		PatientFHIRID:         patientFHIRID,
+		ClinicalStatus:        clinicalStatus.Code,
+		VerificationStatus:    verificationStatus.Code,
+		Type:                  a.Type,
+		Category:              category,
+		Criticality:           a.Criticality,
+		CodeText:              a.Code.Text,
+		CodeSystem:            codeCoding.System,
+		CodeCode:              codeCoding.Code,
+		RecordedDate:          a.RecordedDate,
+		ReactionSeverity:      reactionSeverity,
+		ReactionManifestation: reactionManifestation,
+	}
+}
+
+// ExtractImmunization maps a FHIR Immunization to a models.Immunization ready for upsert.
+func ExtractImmunization(imm *Immunization, patientFHIRID, ehrURL string) *models.Immunization {
+	coding := firstCoding(imm.VaccineCode)
+	return &models.Immunization{
+		FHIRID:         imm.ID,
+		EHRURL:         strings.TrimRight(ehrURL, "/"),
+		PatientFHIRID:  patientFHIRID,
+		Status:         imm.Status,
+		VaccineText:    imm.VaccineCode.Text,
+		VaccineSystem:  coding.System,
+		VaccineCode:    coding.Code,
+		OccurrenceDate: imm.OccurrenceDateTime,
+		PrimarySource:  imm.PrimarySource,
+		LotNumber:      imm.LotNumber,
+	}
+}
+
+// ExtractProcedure maps a FHIR Procedure to a models.Procedure ready for upsert.
+func ExtractProcedure(p *Procedure, patientFHIRID, ehrURL string) *models.Procedure {
+	coding := firstCoding(p.Code)
+
+	// Prefer performedDateTime; fall back to period start.
+	performedDate := p.PerformedDateTime
+	if performedDate == "" && p.PerformedPeriod != nil {
+		performedDate = p.PerformedPeriod.Start
+	}
+
+	// First reason code text/display.
+	var reasonText string
+	if len(p.ReasonCode) > 0 {
+		rc := p.ReasonCode[0]
+		if rc.Text != "" {
+			reasonText = rc.Text
+		} else if len(rc.Coding) > 0 {
+			reasonText = rc.Coding[0].Display
+		}
+	}
+
+	// Outcome text.
+	var outcome string
+	if p.Outcome.Text != "" {
+		outcome = p.Outcome.Text
+	} else if len(p.Outcome.Coding) > 0 {
+		outcome = p.Outcome.Coding[0].Display
+	}
+
+	return &models.Procedure{
+		FHIRID:        p.ID,
+		EHRURL:        strings.TrimRight(ehrURL, "/"),
+		PatientFHIRID: patientFHIRID,
+		Status:        p.Status,
+		CodeText:      p.Code.Text,
+		CodeSystem:    coding.System,
+		CodeCode:      coding.Code,
+		PerformedDate: performedDate,
+		ReasonText:    reasonText,
+		Outcome:       outcome,
+	}
+}
+
+// ExtractEncounter maps a FHIR Encounter to a models.Encounter ready for upsert.
+func ExtractEncounter(e *Encounter, patientFHIRID, ehrURL string) *models.Encounter {
+	// Type text from first type entry.
+	var typeText string
+	if len(e.Type) > 0 {
+		t := e.Type[0]
+		if t.Text != "" {
+			typeText = t.Text
+		} else if len(t.Coding) > 0 {
+			typeText = t.Coding[0].Display
+		}
+	}
+
+	var periodStart, periodEnd string
+	if e.Period != nil {
+		periodStart = e.Period.Start
+		periodEnd = e.Period.End
+	}
+
+	// First reason code text/display.
+	var reasonText string
+	if len(e.ReasonCode) > 0 {
+		rc := e.ReasonCode[0]
+		if rc.Text != "" {
+			reasonText = rc.Text
+		} else if len(rc.Coding) > 0 {
+			reasonText = rc.Coding[0].Display
+		}
+	}
+
+	return &models.Encounter{
+		FHIRID:        e.ID,
+		EHRURL:        strings.TrimRight(ehrURL, "/"),
+		PatientFHIRID: patientFHIRID,
+		Status:        e.Status,
+		Class:         e.Class.Code,
+		TypeText:      typeText,
+		PeriodStart:   periodStart,
+		PeriodEnd:     periodEnd,
+		ReasonText:    reasonText,
+	}
+
+}
+
+// ExtractUSCoreRaceText returns the US Core race text extension value from a Patient,
+// or empty string if not present.
+func ExtractUSCoreRaceText(p *Patient) string {
+	const raceURL = "http://hl7.org/fhir/us/core/StructureDefinition/us-core-race"
+	for _, ext := range p.Extension {
+		if ext.URL == raceURL {
+			for _, nested := range ext.Extension {
+				if nested.URL == "text" {
+					return nested.ValueString
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// ExtractUSCoreEthnicityText returns the US Core ethnicity text extension value from a Patient,
+// or empty string if not present.
+func ExtractUSCoreEthnicityText(p *Patient) string {
+	const ethnicityURL = "http://hl7.org/fhir/us/core/StructureDefinition/us-core-ethnicity"
+	for _, ext := range p.Extension {
+		if ext.URL == ethnicityURL {
+			for _, nested := range ext.Extension {
+				if nested.URL == "text" {
+					return nested.ValueString
+				}
+			}
+		}
+	}
+	return ""
 }
 
 // ParseFHIRUserFromIDToken attempts to extract a FHIR resource reference

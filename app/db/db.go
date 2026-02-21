@@ -239,12 +239,81 @@ var migrations = []migration{
 		CREATE INDEX IF NOT EXISTS idx_allergy_intolerances_patient ON allergy_intolerances(patient_fhir_id, ehr_url);
 		`,
 	},
-	// Future migrations: append new entries here with incrementing version numbers.
-	// Example:
-	// {
-	//     version: 2,
-	//     sql: `ALTER TABLE users ADD COLUMN phone TEXT NOT NULL DEFAULT '';`,
-	// },
+	{
+		version: 5,
+		sql: `
+		ALTER TABLE allergy_intolerances ADD COLUMN reaction_severity TEXT NOT NULL DEFAULT '';
+		ALTER TABLE allergy_intolerances ADD COLUMN reaction_manifestation TEXT NOT NULL DEFAULT '';
+		`,
+	},
+	{
+		version: 6,
+		sql: `
+		CREATE TABLE IF NOT EXISTS immunizations (
+			id              TEXT PRIMARY KEY,
+			fhir_id         TEXT NOT NULL,
+			ehr_url         TEXT NOT NULL,
+			patient_fhir_id TEXT NOT NULL,
+			status          TEXT NOT NULL DEFAULT '',
+			vaccine_text    TEXT NOT NULL DEFAULT '',
+			vaccine_system  TEXT NOT NULL DEFAULT '',
+			vaccine_code    TEXT NOT NULL DEFAULT '',
+			occurrence_date TEXT NOT NULL DEFAULT '',
+			primary_source  INTEGER NOT NULL DEFAULT 0,
+			lot_number      TEXT NOT NULL DEFAULT '',
+			synced_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(fhir_id, ehr_url)
+		);
+		CREATE INDEX IF NOT EXISTS idx_immunizations_patient ON immunizations(patient_fhir_id, ehr_url);
+		`,
+	},
+	{
+		version: 7,
+		sql: `
+		CREATE TABLE IF NOT EXISTS procedures (
+			id              TEXT PRIMARY KEY,
+			fhir_id         TEXT NOT NULL,
+			ehr_url         TEXT NOT NULL,
+			patient_fhir_id TEXT NOT NULL,
+			status          TEXT NOT NULL DEFAULT '',
+			code_text       TEXT NOT NULL DEFAULT '',
+			code_system     TEXT NOT NULL DEFAULT '',
+			code_code       TEXT NOT NULL DEFAULT '',
+			performed_date  TEXT NOT NULL DEFAULT '',
+			reason_text     TEXT NOT NULL DEFAULT '',
+			outcome         TEXT NOT NULL DEFAULT '',
+			synced_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(fhir_id, ehr_url)
+		);
+		CREATE INDEX IF NOT EXISTS idx_procedures_patient ON procedures(patient_fhir_id, ehr_url);
+		`,
+	},
+	{
+		version: 8,
+		sql: `
+		CREATE TABLE IF NOT EXISTS encounters (
+			id              TEXT PRIMARY KEY,
+			fhir_id         TEXT NOT NULL,
+			ehr_url         TEXT NOT NULL,
+			patient_fhir_id TEXT NOT NULL,
+			status          TEXT NOT NULL DEFAULT '',
+			class           TEXT NOT NULL DEFAULT '',
+			type_text       TEXT NOT NULL DEFAULT '',
+			period_start    TEXT NOT NULL DEFAULT '',
+			period_end      TEXT NOT NULL DEFAULT '',
+			reason_text     TEXT NOT NULL DEFAULT '',
+			synced_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(fhir_id, ehr_url)
+		);
+		CREATE INDEX IF NOT EXISTS idx_encounters_patient ON encounters(patient_fhir_id, ehr_url);
+		`,
+	},
+	{
+		version: 9,
+		sql: `
+		ALTER TABLE users ADD COLUMN mrn TEXT NOT NULL DEFAULT '';
+		`,
+	},
 }
 
 // migrate applies any migrations that have not yet been run, in order.
@@ -315,6 +384,7 @@ func (s *Store) UpsertUser(u *models.User) (string, error) {
 				first_name         = ?,
 				middle_name        = ?,
 				last_name          = ?,
+				mrn                = ?,
 				dob                = ?,
 				gender             = ?,
 				email              = ?,
@@ -322,7 +392,7 @@ func (s *Store) UpsertUser(u *models.User) (string, error) {
 				role               = ?,
 				updated_at         = ?
 			WHERE id = ?`,
-			u.FirstName, u.MiddleName, u.LastName,
+			u.FirstName, u.MiddleName, u.LastName, u.MRN,
 			u.DOB, u.Gender, u.Email,
 			u.FHIRResourceType, string(u.Role),
 			now, existingID,
@@ -342,11 +412,11 @@ func (s *Store) UpsertUser(u *models.User) (string, error) {
 	_, err = s.db.Exec(`
 		INSERT INTO users (
 			id, fhir_resource_type, fhir_id, ehr_url, role,
-			first_name, middle_name, last_name, dob, gender, email,
+			first_name, middle_name, last_name, mrn, dob, gender, email,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, u.FHIRResourceType, u.FHIRID, u.EHRURL, string(u.Role),
-		u.FirstName, u.MiddleName, u.LastName, u.DOB, u.Gender, u.Email,
+		u.FirstName, u.MiddleName, u.LastName, u.MRN, u.DOB, u.Gender, u.Email,
 		now, now,
 	)
 	if err != nil {
@@ -361,13 +431,13 @@ func (s *Store) GetUserByFHIRID(fhirID, ehrURL string) (*models.User, error) {
 	u := &models.User{}
 	err := s.db.QueryRow(`
 		SELECT id, fhir_resource_type, fhir_id, ehr_url, role,
-		       first_name, middle_name, last_name, dob, gender, email,
+		       first_name, middle_name, last_name, mrn, dob, gender, email,
 		       created_at, updated_at
 		FROM users WHERE fhir_id = ? AND ehr_url = ?`,
 		fhirID, ehrURL,
 	).Scan(
 		&u.ID, &u.FHIRResourceType, &u.FHIRID, &u.EHRURL, &u.Role,
-		&u.FirstName, &u.MiddleName, &u.LastName, &u.DOB, &u.Gender, &u.Email,
+		&u.FirstName, &u.MiddleName, &u.LastName, &u.MRN, &u.DOB, &u.Gender, &u.Email,
 		&u.CreatedAt, &u.UpdatedAt,
 	)
 	if err != nil {
@@ -381,12 +451,12 @@ func (s *Store) GetUserByID(id string) (*models.User, error) {
 	u := &models.User{}
 	err := s.db.QueryRow(`
 		SELECT id, fhir_resource_type, fhir_id, ehr_url, role,
-		       first_name, middle_name, last_name, dob, gender, email,
+		       first_name, middle_name, last_name, mrn, dob, gender, email,
 		       created_at, updated_at
 		FROM users WHERE id = ?`, id,
 	).Scan(
 		&u.ID, &u.FHIRResourceType, &u.FHIRID, &u.EHRURL, &u.Role,
-		&u.FirstName, &u.MiddleName, &u.LastName, &u.DOB, &u.Gender, &u.Email,
+		&u.FirstName, &u.MiddleName, &u.LastName, &u.MRN, &u.DOB, &u.Gender, &u.Email,
 		&u.CreatedAt, &u.UpdatedAt,
 	)
 	if err != nil {
@@ -399,7 +469,7 @@ func (s *Store) GetUserByID(id string) (*models.User, error) {
 func (s *Store) ListUsersByRole(role models.Role, ehrURL string) ([]models.User, error) {
 	rows, err := s.db.Query(`
 		SELECT id, fhir_resource_type, fhir_id, ehr_url, role,
-		       first_name, middle_name, last_name, dob, gender, email,
+		       first_name, middle_name, last_name, mrn, dob, gender, email,
 		       created_at, updated_at
 		FROM users WHERE role = ? AND ehr_url = ?
 		ORDER BY last_name ASC, first_name ASC`,
@@ -415,7 +485,7 @@ func (s *Store) ListUsersByRole(role models.Role, ehrURL string) ([]models.User,
 		var u models.User
 		if err := rows.Scan(
 			&u.ID, &u.FHIRResourceType, &u.FHIRID, &u.EHRURL, &u.Role,
-			&u.FirstName, &u.MiddleName, &u.LastName, &u.DOB, &u.Gender, &u.Email,
+			&u.FirstName, &u.MiddleName, &u.LastName, &u.MRN, &u.DOB, &u.Gender, &u.Email,
 			&u.CreatedAt, &u.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("db: scan user: %w", err)

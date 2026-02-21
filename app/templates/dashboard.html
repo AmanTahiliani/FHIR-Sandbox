@@ -1,435 +1,473 @@
 {{template "base.html" .}}
 
 {{define "nav"}}
-  <a href="/patients" class="nav-link">All Patients</a>
-  <a href="/" class="nav-link">Home</a>
-  <form action="/logout" method="POST" style="display:inline">
-    <button class="btn btn-danger" type="submit">Logout</button>
-  </form>
+  <div class="flex items-center gap-4">
+    <a href="/patients" class="nav-link">All Patients</a>
+    <a href="/" class="nav-link">Home</a>
+    {{if .Practitioner}}
+    <div class="practitioner-mini-card">
+      <div class="avatar avatar-sm">
+        {{if .Practitioner.FirstName}}{{slice .Practitioner.FirstName 0 1}}{{end}}{{if .Practitioner.LastName}}{{slice .Practitioner.LastName 0 1}}{{end}}
+      </div>
+      <span class="text-xs font-medium">Dr. {{.Practitioner.LastName}}</span>
+    </div>
+    {{end}}
+    <form action="/logout" method="POST" class="flex items-center">
+      <button class="btn btn-danger btn-sm" type="submit">Logout</button>
+    </form>
+  </div>
 {{end}}
 
 {{define "content"}}
 
 {{/* ---- Flash Messages ---- */}}
 {{if .Synced}}
-<div class="flash-message flash-success">
+<div class="flash-message mb-6">
   <div class="flex items-center gap-2">
     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
     <div>
-      <strong>Sync complete</strong>
-      <span class="text-sm">Data has been refreshed from the EHR.</span>
+      <strong class="font-medium text-main">Sync complete</strong>
+      <span class="text-sm text-muted">Data has been refreshed from the EHR.</span>
     </div>
   </div>
-  <button onclick="this.parentElement.style.display='none';" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:inherit;">&times;</button>
+  <button onclick="this.parentElement.style.display='none';" class="btn btn-icon text-muted">&times;</button>
 </div>
 {{end}}
 
-<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-  
-  {{/* ---- Left Column: Patient Context ---- */}}
-  <div class="md:col-span-1">
-    
-    {{/* Practitioner Card */}}
-    {{if .Practitioner}}
-    <div class="card">
-      <div class="card-header">
-        <h3 class="card-title">Clinician</h3>
-        <span class="badge badge-neutral">Active Session</span>
+{{if .Patient}}
+<div class="flex flex-col gap-6 pt-4">
+  {{/* ---- Top Header: Patient Banner ---- */}}
+  <div class="panel panel-padded flex items-center justify-between border-l-brand">
+    <div class="flex items-center gap-6 w-full">
+      <div class="avatar avatar-lg">
+        {{if .Patient.FirstName}}{{slice .Patient.FirstName 0 1}}{{end}}{{if .Patient.LastName}}{{slice .Patient.LastName 0 1}}{{end}}
       </div>
-      <div class="flex items-center gap-4 mb-4">
-        <div class="avatar avatar-practitioner">
-          {{if .Practitioner.FirstName}}{{slice .Practitioner.FirstName 0 1}}{{end}}{{if .Practitioner.LastName}}{{slice .Practitioner.LastName 0 1}}{{end}}
+      <div class="flex flex-col gap-1 w-full">
+        <div class="flex items-center gap-3">
+          <h1 class="page-title m-0">
+            {{.Patient.LastName}}, {{.Patient.FirstName}} {{.Patient.MiddleName}}
+          </h1>
+          <span class="mrn-badge">MRN: {{orDash .Patient.MRN}}</span>
         </div>
-        <div>
-          <h4 class="font-bold">
-            {{if .Practitioner.FirstName}}{{.Practitioner.FirstName}} {{end}}
-            {{if .Practitioner.MiddleName}}{{.Practitioner.MiddleName}} {{end}}
-            {{if .Practitioner.LastName}}{{.Practitioner.LastName}}{{end}}
-          </h4>
-          <span class="text-sm text-muted">
-             {{if eq .Practitioner.Role "practitioner"}}Health Care Practitioner{{else}}Patient{{end}}
-          </span>
+        <div class="patient-meta-strip">
+          <span class="meta-item"><strong>DOB:</strong> {{formatDate .Patient.DOB}} ({{calculateAge .Patient.DOB}} yrs)</span>
+          <span class="meta-item"><strong>Gender:</strong> {{titleCase .Patient.Gender}}</span>
+          {{with .Patient.Email}}<span class="meta-item"><strong>Email:</strong> {{.}}</span>{{end}}
+          {{with primaryPhone .RawPatient}}<span class="meta-item"><strong>Phone:</strong> {{.}}</span>{{end}}
         </div>
       </div>
-    </div>
-    {{end}}
-
-    {{/* Patient Card */}}
-    {{if .Patient}}
-    <div class="card">
-      <div class="card-header">
-        <h3 class="card-title">Patient</h3>
-        <span class="badge badge-success">Active Context</span>
-      </div>
-      
-      <div class="flex items-center gap-4 mb-4">
-        <div class="avatar avatar-patient">
-          {{if .Patient.FirstName}}{{slice .Patient.FirstName 0 1}}{{end}}{{if .Patient.LastName}}{{slice .Patient.LastName 0 1}}{{end}}
-        </div>
-        <div>
-          <h2 class="font-bold text-lg">
-            {{if .Patient.FirstName}}{{.Patient.FirstName}} {{end}}
-            {{if .Patient.MiddleName}}{{.Patient.MiddleName}} {{end}}
-            {{if .Patient.LastName}}{{.Patient.LastName}}{{end}}
-          </h2>
-          <span class="text-sm text-muted">ID: {{.Patient.FHIRID}}</span>
-        </div>
-      </div>
-      
-      <div class="details-list" style="grid-template-columns: 1fr;">
-        <div class="detail-item">
-          <span class="detail-label">DOB</span>
-          <span class="detail-value">{{formatDate .Patient.DOB}}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Gender</span>
-          <span class="detail-value">{{titleCase .Patient.Gender}}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">Email</span>
-          <span class="detail-value">{{orDash .Patient.Email}}</span>
-        </div>
+      <div class="flex flex-col items-end gap-2 shrink-0">
+        <form action="/dashboard/sync?patient_id={{.Patient.FHIRID}}" method="POST" class="flex items-center">
+          <button class="btn btn-primary" type="submit" id="syncBtn" onclick="onSyncClick()">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            Refresh Chart
+          </button>
+        </form>
+        <span class="text-xs text-muted">
+          Last Synced: {{if .LatestSync}}{{formatDateTime .LatestSync.SyncedAt}}{{else}}Never{{end}}
+        </span>
       </div>
     </div>
-
-    {{/* Alerts Card */}}
-    {{if hasCriticalAllergies .Allergies}}
-    <div class="card" style="border-left: 4px solid var(--danger-color);">
-      <div class="card-header" style="border-bottom:none; padding-bottom:0; margin-bottom:0;">
-        <h3 class="card-title text-danger">Critical Allergies</h3>
-      </div>
-      <div class="mt-4">
-        {{range .Allergies}}
-          {{if eq .Criticality "high"}}
-            <div class="flex justify-between items-center mb-2">
-              <span class="font-medium text-danger">{{.CodeText}}</span>
-              <span class="badge badge-danger">High</span>
-            </div>
-          {{end}}
-        {{end}}
-      </div>
-    </div>
-    {{end}}
-
-    {{/* SMART Inspector */}}
-    <div class="card">
-      <details>
-        <summary>SMART Inspector</summary>
-        <div class="mt-4">
-          <div class="detail-item mb-4">
-            <span class="detail-label">FHIR Base URL</span>
-            <code class="code-block">{{.Session.EHRURL}}</code>
-          </div>
-          <div class="detail-item mb-4">
-            <span class="detail-label">Scopes</span>
-            <code class="code-block">{{.Session.Scope}}</code>
-          </div>
-          <div class="detail-item">
-            <span class="detail-label">Access Token</span>
-            <code class="code-block">{{.Session.AccessToken}}</code>
-          </div>
-        </div>
-      </details>
-    </div>
-
-    {{end}}
   </div>
 
-  {{/* ---- Right Column: Clinical Data ---- */}}
-  <div class="md:col-span-2" style="grid-column: span 2;"> <!-- Force span 2 if grid lines up -->
-    {{if .Patient}}
-    <div class="card">
-      <div class="card-header">
-        <h3 class="card-title">Clinical Record</h3>
-        <div class="flex items-center gap-4">
-          <span class="text-sm text-muted">
-            {{if .LatestSync}}Synced: {{formatDateTime .LatestSync.SyncedAt}}{{else}}Never synced{{end}}
-          </span>
-          <form action="/dashboard/sync?patient_id={{.Patient.FHIRID}}" method="POST" style="display:inline;">
-            <button class="btn btn-primary btn-sm" type="submit" id="syncBtn" onclick="onSyncClick()">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-              Sync
-            </button>
-          </form>
+  <div class="dashboard-layout">
+    {{/* ---- Main Content Column ---- */}}
+    <div class="dashboard-main">
+      
+      {{/* Clinical Summary Stats */}}
+      <div class="grid grid-cols-3 gap-4 lg:grid-cols-1">
+        <div class="panel panel-padded stat-card">
+          <div class="stat-value text-blue">{{.Summary.ActiveCondCount}}</div>
+          <div class="stat-label">Active Conditions</div>
+        </div>
+        <div class="panel panel-padded stat-card">
+          <div class="stat-value text-success">{{.Summary.ActiveMedCount}}</div>
+          <div class="stat-label">Active Medications</div>
+        </div>
+        <div class="panel panel-padded stat-card {{if gt .Summary.AbnormalLabCount 0}}danger{{end}}">
+          <div class="stat-value {{if gt .Summary.AbnormalLabCount 0}}text-danger{{end}}">{{.Summary.AbnormalLabCount}}</div>
+          <div class="stat-label">Abnormal Labs (30d)</div>
         </div>
       </div>
 
-      <div class="tabs">
-        <button class="tab-btn active" onclick="openTab(event, 'observations')">Vitals & Labs <span class="badge badge-neutral ml-2">{{len .Observations}}</span></button>
-        <button class="tab-btn" onclick="openTab(event, 'conditions')">Conditions <span class="badge badge-neutral ml-2">{{len .Conditions}}</span></button>
-        <button class="tab-btn" onclick="openTab(event, 'medications')">Meds <span class="badge badge-neutral ml-2">{{len .Medications}}</span></button>
-        <button class="tab-btn" onclick="openTab(event, 'allergies')">Allergies <span class="badge badge-neutral ml-2">{{len .Allergies}}</span></button>
-        <button class="tab-btn" onclick="openTab(event, 'notes')">Notes <span class="badge badge-neutral ml-2">{{len .DocumentReferences}}</span></button>
-      </div>
+      {{/* Clinical Data Tabs */}}
+      <div class="panel p-0 overflow-hidden">
+        <div class="bg-panel px-4 pt-4 border-b border-hard">
+          <div class="tabs">
+            <button class="tab-btn active" onclick="openTab(event, 'summary')">Summary</button>
+            <button class="tab-btn" onclick="openTab(event, 'vitals')">Vitals ({{len (latestObPerCode (filterObsByCategory .Observations "vital-signs"))}})</button>
+            <button class="tab-btn" onclick="openTab(event, 'labs')">Labs ({{len (filterObsByCategory .Observations "laboratory")}})</button>
+            <button class="tab-btn" onclick="openTab(event, 'conditions')">Conditions ({{len .Conditions}})</button>
+            <button class="tab-btn" onclick="openTab(event, 'medications')">Meds ({{len .Medications}})</button>
+            <button class="tab-btn" onclick="openTab(event, 'allergies')">Allergies ({{len .Allergies}})</button>
+            <button class="tab-btn" onclick="openTab(event, 'notes')">Notes ({{len .DocumentReferences}})</button>
+            <button class="tab-btn" onclick="openTab(event, 'more')" title="More Data">...</button>
+          </div>
+        </div>
 
-      {{/* Observations */}}
-      <div id="observations" class="tab-content active">
-        {{if .Observations}}
-          {{range $cat, $obs := groupByCategory .Observations}}
-          <div class="mb-4">
-            <h4 class="font-bold text-muted uppercase text-xs mb-2 tracking-wide">{{titleCase $cat}}</h4>
-            <div class="table-container">
+        <div class="panel-padded min-h-[400px]">
+          {{/* ---- Summary Tab ---- */}}
+          <div id="summary" class="tab-content active">
+            <div class="flex flex-col gap-8">
+              <div class="flex flex-col gap-4">
+                <h3 class="text-xs text-muted font-medium uppercase tracking-wider">Latest Vital Signs</h3>
+                {{if .Summary.LatestVitals}}
+                <div class="vitals-strip">
+                  {{range .Summary.LatestVitals}}
+                  <div class="vital-item {{if isAbnormal .Interpretation}}vital-abnormal{{end}}">
+                    <span class="vital-label" title="{{.CodeText}}">{{orDash .CodeText}}</span>
+                    <span class="vital-value">
+                      {{if .ValueQuantity}}{{printf "%.4g" (derefFloat64 .ValueQuantity)}} <small>{{.ValueUnit}}</small>
+                      {{else if .ValueString}}{{.ValueString}}
+                      {{else}}—{{end}}
+                    </span>
+                    <span class="vital-date">{{formatDate .EffectiveDate}}</span>
+                  </div>
+                  {{end}}
+                </div>
+                {{else}}
+                <p class="empty-state">No vital signs recorded.</p>
+                {{end}}
+              </div>
+
+              <div class="flex flex-col gap-4">
+                <h3 class="text-xs text-muted font-medium uppercase tracking-wider">Recent Abnormal Labs</h3>
+                {{if .Summary.AbnormalLabsRecent}}
+                <div class="table-wrapper">
+                  <table>
+                    <thead>
+                      <tr><th>Date</th><th>Test</th><th>Result</th><th>Flag</th></tr>
+                    </thead>
+                    <tbody>
+                      {{range .Summary.AbnormalLabsRecent}}
+                      <tr class="row-abnormal">
+                        <td>{{formatDate .EffectiveDate}}</td>
+                        <td class="font-medium">{{.CodeText}}</td>
+                        <td>{{if .ValueQuantity}}{{printf "%.4g" (derefFloat64 .ValueQuantity)}} {{.ValueUnit}}{{else}}{{.ValueString}}{{end}}</td>
+                        <td><span class="badge badge-danger">{{.Interpretation}}</span></td>
+                      </tr>
+                      {{end}}
+                    </tbody>
+                  </table>
+                </div>
+                {{else}}
+                <p class="empty-state">No abnormal labs in the last 30 days.</p>
+                {{end}}
+              </div>
+            </div>
+          </div>
+
+          {{/* ---- Vitals Tab ---- */}}
+          <div id="vitals" class="tab-content">
+            {{$vitals := latestObPerCode (filterObsByCategory .Observations "vital-signs")}}
+            {{if $vitals}}
+            <div class="vitals-grid">
+              {{range $vitals}}
+              <div class="panel panel-padded p-5 {{if isAbnormal .Interpretation}}vital-abnormal{{end}}">
+                <div class="flex justify-between items-start mb-2">
+                  <span class="text-xs font-semibold text-muted">{{orDash .CodeText}}</span>
+                  {{if isAbnormal .Interpretation}}<span class="badge badge-danger">{{.Interpretation}}</span>{{end}}
+                </div>
+                <div class="text-2xl font-semibold mb-4">
+                  {{if .ValueQuantity}}{{printf "%.4g" (derefFloat64 .ValueQuantity)}} <span class="text-sm font-medium text-muted">{{.ValueUnit}}</span>
+                  {{else if .ValueString}}{{.ValueString}}
+                  {{else}}—{{end}}
+                </div>
+                <div class="flex flex-col gap-1 text-xs text-muted">
+                  <span>{{formatDate .EffectiveDate}}</span>
+                  {{if or .ReferenceRangeLow .ReferenceRangeHigh}}
+                  <span>Ref: {{if .ReferenceRangeLow}}{{printf "%.4g" (derefFloat64 .ReferenceRangeLow)}}{{else}}—{{end}}-{{if .ReferenceRangeHigh}}{{printf "%.4g" (derefFloat64 .ReferenceRangeHigh)}}{{else}}—{{end}}</span>
+                  {{end}}
+                </div>
+              </div>
+              {{end}}
+            </div>
+            {{else}}
+              <p class="empty-state">No vital signs found.</p>
+            {{end}}
+          </div>
+
+          {{/* ---- Labs Tab ---- */}}
+          <div id="labs" class="tab-content">
+            {{$labs := filterObsByCategory .Observations "laboratory"}}
+            {{if $labs}}
+            <div class="table-wrapper">
               <table>
                 <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Code</th>
-                    <th>Value</th>
-                    <th>Interpretation</th>
-                    <th>Status</th>
-                  </tr>
+                  <tr><th>Date</th><th>Test</th><th>Result</th><th>Ref Range</th><th>Flag</th></tr>
                 </thead>
                 <tbody>
-                  {{range $obs}}
-                  <tr>
-                    <td>{{orDash .EffectiveDate}}</td>
+                  {{range $labs}}
+                  <tr {{if isAbnormal .Interpretation}}class="row-abnormal"{{end}}>
+                    <td>{{formatDate .EffectiveDate}}</td>
                     <td class="font-medium">{{orDash .CodeText}}</td>
                     <td>
-                      {{if .ValueQuantity}}
-                        <strong>{{printf "%.4g" (derefFloat64 .ValueQuantity)}}</strong> {{.ValueUnit}}
-                        {{if or .ReferenceRangeLow .ReferenceRangeHigh}}
-                          <div class="text-xs text-muted">
-                            Ref: [{{if .ReferenceRangeLow}}{{printf "%.4g" (derefFloat64 .ReferenceRangeLow)}}{{else}}—{{end}} – {{if .ReferenceRangeHigh}}{{printf "%.4g" (derefFloat64 .ReferenceRangeHigh)}}{{else}}—{{end}}]
-                          </div>
-                        {{end}}
-                      {{else if .ValueString}}
-                        {{.ValueString}}
+                      {{if .ValueQuantity}}<strong>{{printf "%.4g" (derefFloat64 .ValueQuantity)}}</strong> {{.ValueUnit}}
+                      {{else if .ValueString}}{{.ValueString}}
                       {{else}}—{{end}}
                     </td>
-                    <td>
-                      {{if .Interpretation}}
-                        <span class="badge badge-info">{{.Interpretation}}</span>
+                    <td class="text-xs text-muted">
+                      {{if or .ReferenceRangeLow .ReferenceRangeHigh}}
+                        [{{if .ReferenceRangeLow}}{{printf "%.4g" (derefFloat64 .ReferenceRangeLow)}}{{else}}—{{end}} – {{if .ReferenceRangeHigh}}{{printf "%.4g" (derefFloat64 .ReferenceRangeHigh)}}{{else}}—{{end}}]
                       {{else}}—{{end}}
                     </td>
-                    <td><span class="badge badge-neutral">{{.Status}}</span></td>
+                    <td>{{if isAbnormal .Interpretation}}<span class="badge badge-danger">{{.Interpretation}}</span>{{else if .Interpretation}}<span class="badge badge-neutral">{{.Interpretation}}</span>{{end}}</td>
                   </tr>
                   {{end}}
                 </tbody>
               </table>
             </div>
+            {{else}}
+              <p class="empty-state">No lab results found.</p>
+            {{end}}
+          </div>
+
+          {{/* ---- Conditions Tab ---- */}}
+          <div id="conditions" class="tab-content">
+            {{if .Conditions}}
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr><th>Onset</th><th>Condition</th><th>Status</th><th>Verification</th></tr>
+                </thead>
+                <tbody>
+                  {{range .Conditions}}
+                  <tr>
+                    <td>{{formatDate (or .OnsetDate .RecordedDate)}}</td>
+                    <td class="font-medium">{{orDash .CodeText}}</td>
+                    <td>{{if eq .ClinicalStatus "active"}}<span class="badge badge-success">Active</span>{{else}}<span class="badge badge-neutral">{{.ClinicalStatus}}</span>{{end}}</td>
+                    <td>{{titleCase .VerificationStatus}}</td>
+                  </tr>
+                  {{end}}
+                </tbody>
+              </table>
+            </div>
+            {{else}}
+              <p class="empty-state">No conditions found.</p>
+            {{end}}
+          </div>
+
+          {{/* ---- Medications Tab ---- */}}
+          <div id="medications" class="tab-content">
+            {{if .Medications}}
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr><th>Authored</th><th>Medication</th><th>Dosage</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                  {{range .Medications}}
+                  <tr>
+                    <td>{{formatDate .AuthoredOn}}</td>
+                    <td class="font-medium">{{orDash .MedCodeText}}</td>
+                    <td>{{orDash .DosageText}}</td>
+                    <td>{{if eq .Status "active"}}<span class="badge badge-success">Active</span>{{else}}<span class="badge badge-neutral">{{.Status}}</span>{{end}}</td>
+                  </tr>
+                  {{end}}
+                </tbody>
+              </table>
+            </div>
+            {{else}}
+              <p class="empty-state">No medications found.</p>
+            {{end}}
+          </div>
+
+          {{/* ---- Allergies Tab ---- */}}
+          <div id="allergies" class="tab-content">
+            {{if .Allergies}}
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr><th>Allergen</th><th>Reaction</th><th>Severity</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                  {{range .Allergies}}
+                  <tr>
+                    <td class="font-medium">{{orDash .CodeText}}</td>
+                    <td>{{orDash .ReactionManifestation}}</td>
+                    <td>{{if eq .ReactionSeverity "severe"}}<span class="badge badge-danger">Severe</span>{{else if .ReactionSeverity}}<span class="badge badge-warning">{{.ReactionSeverity}}</span>{{else}}—{{end}}</td>
+                    <td>{{titleCase .ClinicalStatus}}</td>
+                  </tr>
+                  {{end}}
+                </tbody>
+              </table>
+            </div>
+            {{else}}
+              <p class="empty-state">No allergies found.</p>
+            {{end}}
+          </div>
+
+          {{/* ---- Notes Tab ---- */}}
+          <div id="notes" class="tab-content">
+            {{if .DocumentReferences}}
+            <div class="notes-list">
+              {{range .DocumentReferences}}
+              <div class="panel panel-padded note-item">
+                <div class="note-header">
+                  <span class="note-date">{{formatDate .Date}}</span>
+                  <span class="note-type">{{orDash .TypeText}}</span>
+                  {{if .ContentURL}}<a href="{{.ContentURL}}" target="_blank" class="btn btn-outline btn-sm">View Document</a>{{end}}
+                </div>
+                <p class="note-desc">{{orDash .Description}}</p>
+              </div>
+              {{end}}
+            </div>
+            {{else}}
+              <p class="empty-state">No clinical notes found.</p>
+            {{end}}
+          </div>
+
+          {{/* ---- More Tab (Procedures, Immunizations, Encounters) ---- */}}
+          <div id="more" class="tab-content">
+            <div class="flex flex-col gap-6">
+              <div class="flex flex-col gap-2">
+                <h4 class="font-semibold text-sm text-main">Recent Procedures</h4>
+                {{if .Procedures}}
+                  <ul class="flex flex-col gap-1 text-sm text-muted">
+                    {{range (slice .Procedures 0 (min (len .Procedures) 5))}}
+                    <li><strong class="text-main">{{formatDate .PerformedDate}}:</strong> {{.CodeText}}</li>
+                    {{end}}
+                  </ul>
+                {{else}}<p class="text-muted text-xs">None recorded</p>{{end}}
+              </div>
+              <div class="flex flex-col gap-2">
+                <h4 class="font-semibold text-sm text-main">Recent Immunizations</h4>
+                {{if .Immunizations}}
+                  <ul class="flex flex-col gap-1 text-sm text-muted">
+                    {{range (slice .Immunizations 0 (min (len .Immunizations) 5))}}
+                    <li><strong class="text-main">{{formatDate .OccurrenceDate}}:</strong> {{.VaccineText}}</li>
+                    {{end}}
+                  </ul>
+                {{else}}<p class="text-muted text-xs">None recorded</p>{{end}}
+              </div>
+              <div class="flex flex-col gap-2">
+                <h4 class="font-semibold text-sm text-main">Recent Encounters</h4>
+                {{if .Encounters}}
+                  <ul class="flex flex-col gap-1 text-sm text-muted">
+                    {{range (slice .Encounters 0 (min (len .Encounters) 5))}}
+                    <li><strong class="text-main">{{formatDate .PeriodStart}}:</strong> {{or .TypeText "Visit"}}</li>
+                    {{end}}
+                  </ul>
+                {{else}}<p class="text-muted text-xs">None recorded</p>{{end}}
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    {{/* ---- Sidebar Column ---- */}}
+    <div class="dashboard-sidebar">
+      
+      {{/* High Priority: Alerts */}}
+      {{if hasCriticalAllergies .Allergies}}
+      <div class="panel panel-padded alert-card">
+        <div class="flex items-center gap-2 mb-4">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-danger"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+          <h3 class="font-semibold text-danger">Critical Alerts</h3>
+        </div>
+        <div class="flex flex-col gap-3">
+          {{range .Allergies}}
+            {{if eq .Criticality "high"}}
+              <div class="alert-item">
+                <span class="alert-code">{{.CodeText}} Allergy</span>
+                {{with .ReactionManifestation}}<span class="alert-detail">{{.}}{{with $.ReactionSeverity}} ({{.}}){{end}}</span>{{end}}
+              </div>
+            {{end}}
+          {{end}}
+        </div>
+      </div>
+      {{end}}
+
+      {{/* Patient Details (Expanded) */}}
+      <div class="panel panel-padded">
+        <div class="mb-4">
+          <h3 class="font-semibold text-main">Patient Information</h3>
+        </div>
+        <div class="kv-list">
+          <div class="kv-row">
+            <span class="kv-label">Full Name</span>
+            <span class="kv-value font-medium">{{.Patient.FirstName}} {{.Patient.MiddleName}} {{.Patient.LastName}}</span>
+          </div>
+          <div class="kv-row">
+            <span class="kv-label">FHIR ID</span>
+            <span class="kv-value text-xs font-mono">{{.Patient.FHIRID}}</span>
+          </div>
+          {{with primaryAddress .RawPatient}}
+          <div class="kv-row">
+            <span class="kv-label">Address</span>
+            <span class="kv-value">{{.}}</span>
           </div>
           {{end}}
-        {{else}}
-          <div class="text-center py-8 text-muted">No observations found.</div>
-        {{end}}
+          {{with usRace .RawPatient}}
+          <div class="kv-row">
+            <span class="kv-label">Race</span>
+            <span class="kv-value">{{.}}</span>
+          </div>
+          {{end}}
+          {{with usEthnicity .RawPatient}}
+          <div class="kv-row">
+            <span class="kv-label">Ethnicity</span>
+            <span class="kv-value">{{.}}</span>
+          </div>
+          {{end}}
+        </div>
       </div>
 
-      {{/* Conditions */}}
-      <div id="conditions" class="tab-content">
-        {{if .Conditions}}
-        <div class="flex gap-2 mb-4">
-          <button onclick="filterConditions('all')" class="btn btn-outline btn-sm active">All</button>
-          <button onclick="filterConditions('active')" class="btn btn-outline btn-sm">Active</button>
-          <button onclick="filterConditions('resolved')" class="btn btn-outline btn-sm">Resolved</button>
-        </div>
-        <div class="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Condition</th>
-                <th>Status</th>
-                <th>Verification</th>
-              </tr>
-            </thead>
-            <tbody>
-              {{range .Conditions}}
-              <tr class="condition-row" data-status="{{.ClinicalStatus}}">
-                <td>{{orDash .RecordedDate}}</td>
-                <td class="font-medium">{{orDash .CodeText}}</td>
-                <td>
-                  {{if eq .ClinicalStatus "active"}}
-                    <span class="badge badge-success">Active</span>
-                  {{else if eq .ClinicalStatus "resolved"}}
-                    <span class="badge badge-neutral">Resolved</span>
-                  {{else}}
-                    <span class="badge badge-warning">{{.ClinicalStatus}}</span>
-                  {{end}}
-                </td>
-                <td>{{titleCase .VerificationStatus}}</td>
-              </tr>
-              {{end}}
-            </tbody>
-          </table>
-        </div>
-        {{else}}
-          <div class="text-center py-8 text-muted">No conditions found.</div>
-        {{end}}
-      </div>
-
-      {{/* Medications */}}
-      <div id="medications" class="tab-content">
-        {{if .Medications}}
-        <div class="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Authored</th>
-                <th>Medication</th>
-                <th>Dosage</th>
-                <th>Status</th>
-                <th>Requester</th>
-              </tr>
-            </thead>
-            <tbody>
-              {{range .Medications}}
-              <tr>
-                <td>{{orDash .AuthoredOn}}</td>
-                <td class="font-medium">{{orDash .MedCodeText}}</td>
-                <td>{{orDash .DosageText}}</td>
-                <td>
-                   {{if eq .Status "active"}}
-                    <span class="badge badge-success">Active</span>
-                   {{else}}
-                    <span class="badge badge-neutral">{{.Status}}</span>
-                   {{end}}
-                </td>
-                <td>{{orDash .RequesterDisplay}}</td>
-              </tr>
-              {{end}}
-            </tbody>
-          </table>
-        </div>
-        {{else}}
-          <div class="text-center py-8 text-muted">No medications found.</div>
-        {{end}}
-      </div>
-
-      {{/* Allergies */}}
-      <div id="allergies" class="tab-content">
-        {{if .Allergies}}
-        <div class="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Allergen</th>
-                <th>Type</th>
-                <th>Criticality</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {{range .Allergies}}
-              <tr>
-                <td>{{orDash .RecordedDate}}</td>
-                <td class="font-medium">{{orDash .CodeText}}</td>
-                <td>{{titleCase .Type}}</td>
-                <td>
-                  {{if eq .Criticality "high"}}
-                    <span class="badge badge-danger">High</span>
-                  {{else if eq .Criticality "medium"}}
-                    <span class="badge badge-warning">Medium</span>
-                  {{else}}
-                    <span class="badge badge-neutral">{{orDash .Criticality}}</span>
-                  {{end}}
-                </td>
-                <td>{{titleCase .ClinicalStatus}}</td>
-              </tr>
-              {{end}}
-            </tbody>
-          </table>
-        </div>
-        {{else}}
-          <div class="text-center py-8 text-muted">No allergies found.</div>
-        {{end}}
-      </div>
-
-      {{/* Notes */}}
-      <div id="notes" class="tab-content">
-        {{if .DocumentReferences}}
-        <div class="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Type</th>
-                <th>Description</th>
-                <th>Status</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {{range .DocumentReferences}}
-              <tr>
-                <td>{{orDash .Date}}</td>
-                <td class="font-medium">{{orDash .TypeText}}</td>
-                <td>{{orDash .Description}}</td>
-                <td><span class="badge badge-neutral">{{orDash .Status}}</span></td>
-                <td>
-                  {{if .ContentURL}}
-                    <a href="{{.ContentURL}}" target="_blank" class="btn btn-outline btn-sm" style="padding: 2px 8px; font-size: 0.75rem;">View</a>
-                  {{else}}
-                    <span class="text-muted text-xs">Inline</span>
-                  {{end}}
-                </td>
-              </tr>
-              {{end}}
-            </tbody>
-          </table>
-        </div>
-        {{else}}
-          <div class="text-center py-8 text-muted">No clinical notes found.</div>
-        {{end}}
+      {{/* Low Priority: SMART Inspector */}}
+      <div class="panel panel-padded inspector-card">
+        <details>
+          <summary class="text-xs text-muted font-medium uppercase tracking-wider cursor-pointer outline-none">System Inspector</summary>
+          <div class="inspector-content mt-4">
+            <div class="inspect-item">
+              <span class="label">EHR Server</span>
+              <code class="text-xs text-muted break-all" title="{{.Session.EHRURL}}">{{.Session.EHRURL}}</code>
+            </div>
+            <div class="inspect-item">
+              <span class="label">Granted Scopes</span>
+              <div class="scopes-cloud">
+                {{range (split .Session.Scope " ")}}
+                <span class="scope-tag">{{.}}</span>
+                {{end}}
+              </div>
+            </div>
+          </div>
+        </details>
       </div>
 
     </div>
-    {{end}} {{/* End if .Patient */}}
   </div>
 </div>
+{{end}}
 
 {{end}}
 
 {{define "scripts"}}
 <script>
 function openTab(evt, tabName) {
-  var i, tabcontent, tablinks;
-  tabcontent = document.getElementsByClassName("tab-content");
-  for (i = 0; i < tabcontent.length; i++) {
+  var tabcontent = document.getElementsByClassName("tab-content");
+  for (var i = 0; i < tabcontent.length; i++) {
     tabcontent[i].classList.remove("active");
-    tabcontent[i].style.display = "none";
   }
-  tablinks = document.getElementsByClassName("tab-btn");
-  for (i = 0; i < tablinks.length; i++) {
+  var tablinks = document.getElementsByClassName("tab-btn");
+  for (var i = 0; i < tablinks.length; i++) {
     tablinks[i].classList.remove("active");
   }
-  
   var target = document.getElementById(tabName);
-  target.style.display = "block";
-  // Small timeout to allow display:block to apply before adding active class for animation
   setTimeout(() => target.classList.add("active"), 10);
-  
   evt.currentTarget.classList.add("active");
-}
-
-function filterConditions(status) {
-  var rows = document.getElementsByClassName("condition-row");
-  // Update buttons
-  var btns = document.querySelectorAll('#conditions .btn-outline');
-  btns.forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
-
-  for (var i = 0; i < rows.length; i++) {
-    var rowStatus = rows[i].getAttribute("data-status");
-    if (status === "all" || rowStatus === status) {
-      rows[i].style.display = "";
-    } else {
-      rows[i].style.display = "none";
-    }
-  }
 }
 
 function onSyncClick() {
   var btn = document.getElementById("syncBtn");
-  // Delay disabling to ensure form submission triggers
   setTimeout(function() {
     btn.disabled = true;
     btn.innerHTML = `<svg class="animate-spin" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Syncing...`;
   }, 50);
 }
+
+// Helper for splitting scopes string
+function split(s, sep) { return s.split(sep); }
 </script>
-<style>
-  .animate-spin { animation: spin 1s linear infinite; }
-  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-</style>
 {{end}}

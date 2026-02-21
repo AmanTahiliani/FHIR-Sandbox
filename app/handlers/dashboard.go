@@ -3,11 +3,59 @@ package handlers
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/AmanTahiliani/FHIR-Sandbox/app/fhir"
 	"github.com/AmanTahiliani/FHIR-Sandbox/app/middleware"
 	"github.com/AmanTahiliani/FHIR-Sandbox/app/models"
 )
+
+// ClinicalSummary holds pre-computed summary values for the Summary tab.
+type ClinicalSummary struct {
+	LatestVitals       []models.Observation
+	ActiveCondCount    int
+	ActiveMedCount     int
+	AbnormalLabCount   int
+	AbnormalLabsRecent []models.Observation
+}
+
+// buildClinicalSummary computes the clinical summary from existing in-memory data.
+// No additional DB or FHIR calls are made.
+func buildClinicalSummary(obs []models.Observation, conds []models.Condition, meds []models.MedicationRequest) ClinicalSummary {
+	// Latest value per vital code.
+	latestVitals := latestObsPerCode(filterObsByCategory(obs, "vital-signs"))
+
+	activeConds := 0
+	for _, c := range conds {
+		if c.ClinicalStatus == "active" {
+			activeConds++
+		}
+	}
+
+	activeMeds := 0
+	for _, m := range meds {
+		if m.Status == "active" {
+			activeMeds++
+		}
+	}
+
+	// Abnormal labs within the last 30 days.
+	cutoff := time.Now().AddDate(0, 0, -30).Format("2006-01-02")
+	var abnormalLabs []models.Observation
+	for _, o := range obs {
+		if isAbnormalInterp(o.Interpretation) && o.EffectiveDate >= cutoff {
+			abnormalLabs = append(abnormalLabs, o)
+		}
+	}
+
+	return ClinicalSummary{
+		LatestVitals:       latestVitals,
+		ActiveCondCount:    activeConds,
+		ActiveMedCount:     activeMeds,
+		AbnormalLabCount:   len(abnormalLabs),
+		AbnormalLabsRecent: abnormalLabs,
+	}
+}
 
 // HandleDashboard renders the stable patient dashboard.
 // On first load (no prior sync), automatically triggers a sync to populate data.
@@ -63,7 +111,6 @@ func (h *Handler) HandleDashboard(w http.ResponseWriter, r *http.Request) {
 	observations, err := h.store.ListObservations(patientID, ehrURL)
 	if err != nil {
 		log.Printf("handlers: dashboard ListObservations Patient/%s: %v", patientID, err)
-		// Non-fatal; render with empty slice.
 	}
 
 	conditions, err := h.store.ListConditions(patientID, ehrURL)
@@ -86,6 +133,22 @@ func (h *Handler) HandleDashboard(w http.ResponseWriter, r *http.Request) {
 		log.Printf("handlers: dashboard ListAllergyIntolerances Patient/%s: %v", patientID, err)
 	}
 
+	immunizations, err := h.store.ListImmunizations(patientID, ehrURL)
+	if err != nil {
+		log.Printf("handlers: dashboard ListImmunizations Patient/%s: %v", patientID, err)
+	}
+
+	procedures, err := h.store.ListProcedures(patientID, ehrURL)
+	if err != nil {
+		log.Printf("handlers: dashboard ListProcedures Patient/%s: %v", patientID, err)
+	}
+
+	encounters, err := h.store.ListEncounters(patientID, ehrURL)
+	if err != nil {
+		log.Printf("handlers: dashboard ListEncounters Patient/%s: %v", patientID, err)
+	}
+
+	summary := buildClinicalSummary(observations, conditions, medications)
 	synced := r.URL.Query().Get("synced") == "true"
 
 	h.render(w, "dashboard.html", dashboardData{
@@ -97,6 +160,10 @@ func (h *Handler) HandleDashboard(w http.ResponseWriter, r *http.Request) {
 		DocumentReferences: docRefs,
 		Medications:        medications,
 		Allergies:          allergies,
+		Immunizations:      immunizations,
+		Procedures:         procedures,
+		Encounters:         encounters,
+		Summary:            summary,
 		LatestSync:         latestSync,
 		Session:            sess,
 		Synced:             synced,
@@ -113,6 +180,10 @@ type dashboardData struct {
 	DocumentReferences []models.DocumentReference
 	Medications        []models.MedicationRequest
 	Allergies          []models.AllergyIntolerance
+	Immunizations      []models.Immunization
+	Procedures         []models.Procedure
+	Encounters         []models.Encounter
+	Summary            ClinicalSummary
 	LatestSync         *models.PatientSync
 	Session            *models.Session
 	Synced             bool

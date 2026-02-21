@@ -21,14 +21,18 @@ package handlers
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"log"
 	"net/http"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/AmanTahiliani/FHIR-Sandbox/app/config"
 	"github.com/AmanTahiliani/FHIR-Sandbox/app/db"
+	"github.com/AmanTahiliani/FHIR-Sandbox/app/fhir"
 	"github.com/AmanTahiliani/FHIR-Sandbox/app/models"
 )
 
@@ -111,20 +115,74 @@ func generateState() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// templateFuncs returns the custom template function map.
+// ---------------------------------------------------------------------------
+// Private helpers used by both template funcs and buildClinicalSummary.
+// ---------------------------------------------------------------------------
+
+// filterObsByCategory returns observations whose category matches cat
+// using a normalised (lowercase, spaces→hyphens) comparison.
+func filterObsByCategory(obs []models.Observation, cat string) []models.Observation {
+	want := strings.ToLower(strings.ReplaceAll(cat, " ", "-"))
+	var out []models.Observation
+	for _, o := range obs {
+		got := strings.ToLower(strings.ReplaceAll(o.Category, " ", "-"))
+		if got == want {
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
+// latestObsPerCode returns the most-recent observation per LOINC code (or code
+// text when code is absent), sorted by code text for stable display.
+func latestObsPerCode(obs []models.Observation) []models.Observation {
+	latest := make(map[string]models.Observation)
+	for _, o := range obs {
+		key := o.CodeCode
+		if key == "" {
+			key = o.CodeText
+		}
+		if existing, ok := latest[key]; !ok || o.EffectiveDate > existing.EffectiveDate {
+			latest[key] = o
+		}
+	}
+	out := make([]models.Observation, 0, len(latest))
+	for _, o := range latest {
+		out = append(out, o)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CodeText < out[j].CodeText })
+	return out
+}
+
+// isAbnormalInterp returns true for interpretation codes that indicate an
+// out-of-range or critical result.
+func isAbnormalInterp(interp string) bool {
+	switch strings.ToUpper(strings.TrimSpace(interp)) {
+	case "H", "HH", "L", "LL", "A", "AA", "HIGH", "LOW", "ABNORMAL", "CRITICAL":
+		return true
+	}
+	return false
+}
+
+// ---------------------------------------------------------------------------
+// TemplateFuncs returns the custom template function map.
 // Defined here so it is available to both main.go (for wiring) and
 // handler tests.
+// ---------------------------------------------------------------------------
 func TemplateFuncs() template.FuncMap {
 	return template.FuncMap{
 		"formatDate": func(s string) string {
 			if s == "" {
 				return "—"
 			}
-			t, err := time.Parse("2006-01-02", s)
-			if err != nil {
-				return s
+			// Try full datetime first (FHIR dateTime), then plain date.
+			for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05Z0700", "2006-01-02"} {
+				t, err := time.Parse(layout, s)
+				if err == nil {
+					return t.Format("Jan 2, 2006")
+				}
 			}
-			return t.Format("January 2, 2006")
+			return s
 		},
 		"formatDateTime": func(t time.Time) string {
 			if t.IsZero() {
@@ -153,6 +211,7 @@ func TemplateFuncs() template.FuncMap {
 			}
 			return s
 		},
+		// groupByCategory is kept for backward compatibility.
 		"groupByCategory": func(obs []models.Observation) map[string][]models.Observation {
 			m := make(map[string][]models.Observation)
 			for _, o := range obs {
@@ -171,6 +230,130 @@ func TemplateFuncs() template.FuncMap {
 				}
 			}
 			return false
+		},
+		// --- T1.2 Vitals/Labs ---
+		"filterObsByCategory": func(obs []models.Observation, cat string) []models.Observation {
+			return filterObsByCategory(obs, cat)
+		},
+		"latestObPerCode": func(obs []models.Observation) []models.Observation {
+			return latestObsPerCode(obs)
+		},
+		"isAbnormal": func(interp string) bool {
+			return isAbnormalInterp(interp)
+		},
+		// --- T1.3 Medication history ---
+		"filterMedsByStatus": func(meds []models.MedicationRequest, status string) []models.MedicationRequest {
+			if status == "" || status == "all" {
+				return meds
+			}
+			var out []models.MedicationRequest
+			for _, m := range meds {
+				if strings.EqualFold(m.Status, status) {
+					out = append(out, m)
+				}
+			}
+			return out
+		},
+		// --- T1.1 Demographics ---
+		"calculateAge": func(dob string) string {
+			if dob == "" {
+				return ""
+			}
+			t, err := time.Parse("2006-01-02", dob)
+			if err != nil {
+				return ""
+			}
+			now := time.Now()
+			years := now.Year() - t.Year()
+			if now.Month() < t.Month() || (now.Month() == t.Month() && now.Day() < t.Day()) {
+				years--
+			}
+			return fmt.Sprintf("%d", years)
+		},
+		"primaryPhone": func(p *fhir.Patient) string {
+			if p == nil {
+				return ""
+			}
+			for _, tc := range p.Telecom {
+				if tc.System == "phone" && tc.Value != "" {
+					return tc.Value
+				}
+			}
+			return ""
+		},
+		"primaryAddress": func(p *fhir.Patient) string {
+			if p == nil || len(p.Address) == 0 {
+				return ""
+			}
+			addr := p.Address[0]
+			var parts []string
+			if len(addr.Line) > 0 {
+				parts = append(parts, addr.Line[0])
+			}
+			if addr.City != "" {
+				parts = append(parts, addr.City)
+			}
+			if addr.State != "" {
+				parts = append(parts, addr.State)
+			}
+			if addr.PostalCode != "" {
+				parts = append(parts, addr.PostalCode)
+			}
+			return strings.Join(parts, ", ")
+		},
+		"usRace": func(p *fhir.Patient) string {
+			if p == nil {
+				return ""
+			}
+			return fhir.ExtractUSCoreRaceText(p)
+		},
+		"usEthnicity": func(p *fhir.Patient) string {
+			if p == nil {
+				return ""
+			}
+			return fhir.ExtractUSCoreEthnicityText(p)
+		},
+		// --- T2.3 Encounters ---
+		"encounterClassBadge": func(class string) string {
+			switch strings.ToUpper(class) {
+			case "AMB":
+				return "badge-info"
+			case "EMER":
+				return "badge-danger"
+			case "IMP", "INPATIENT":
+				return "badge-warning"
+			default:
+				return "badge-neutral"
+			}
+		},
+		"encounterClassLabel": func(class string) string {
+			switch strings.ToUpper(class) {
+			case "AMB":
+				return "Ambulatory"
+			case "EMER":
+				return "Emergency"
+			case "IMP":
+				return "Inpatient"
+			case "VR":
+				return "Virtual"
+			default:
+				if class == "" {
+					return "Visit"
+				}
+				return class
+			}
+		},
+		"split": func(s, sep string) []string {
+			if s == "" {
+				return nil
+			}
+			return strings.Split(s, sep)
+		},
+		"min": func(a, b int) int {
+			if a < b {
+				return a
+			}
+			return b
 		},
 	}
 }

@@ -48,6 +48,7 @@ type User struct {
 	FirstName  string `json:"first_name" db:"first_name"`
 	MiddleName string `json:"middle_name" db:"middle_name"`
 	LastName   string `json:"last_name" db:"last_name"`
+	MRN        string `json:"mrn" db:"mrn"`       // Medical Record Number
 	DOB        string `json:"dob" db:"dob"`       // ISO 8601 date, e.g. "1990-04-22"
 	Gender     string `json:"gender" db:"gender"` // FHIR value set: male|female|other|unknown
 
@@ -182,20 +183,69 @@ type MedicationRequest struct {
 
 // AllergyIntolerance is the persisted representation of a FHIR R4 AllergyIntolerance.
 type AllergyIntolerance struct {
-	ID                 string    `json:"id"                    db:"id"`
-	FHIRID             string    `json:"fhir_id"               db:"fhir_id"`
-	EHRURL             string    `json:"ehr_url"               db:"ehr_url"`
-	PatientFHIRID      string    `json:"patient_fhir_id"       db:"patient_fhir_id"`
-	ClinicalStatus     string    `json:"clinical_status"       db:"clinical_status"`
-	VerificationStatus string    `json:"verification_status"   db:"verification_status"`
-	Type               string    `json:"type"                  db:"type"`
-	Category           string    `json:"category"              db:"category"`
-	Criticality        string    `json:"criticality"           db:"criticality"`
-	CodeText           string    `json:"code_text"             db:"code_text"`
-	CodeSystem         string    `json:"code_system"           db:"code_system"`
-	CodeCode           string    `json:"code_code"             db:"code_code"`
-	RecordedDate       string    `json:"recorded_date"         db:"recorded_date"`
-	SyncedAt           time.Time `json:"synced_at"             db:"synced_at"`
+	ID                    string    `json:"id"                      db:"id"`
+	FHIRID                string    `json:"fhir_id"                 db:"fhir_id"`
+	EHRURL                string    `json:"ehr_url"                 db:"ehr_url"`
+	PatientFHIRID         string    `json:"patient_fhir_id"         db:"patient_fhir_id"`
+	ClinicalStatus        string    `json:"clinical_status"         db:"clinical_status"`
+	VerificationStatus    string    `json:"verification_status"     db:"verification_status"`
+	Type                  string    `json:"type"                    db:"type"`
+	Category              string    `json:"category"                db:"category"`
+	Criticality           string    `json:"criticality"             db:"criticality"`
+	CodeText              string    `json:"code_text"               db:"code_text"`
+	CodeSystem            string    `json:"code_system"             db:"code_system"`
+	CodeCode              string    `json:"code_code"               db:"code_code"`
+	RecordedDate          string    `json:"recorded_date"           db:"recorded_date"`
+	ReactionSeverity      string    `json:"reaction_severity"       db:"reaction_severity"`
+	ReactionManifestation string    `json:"reaction_manifestation"  db:"reaction_manifestation"`
+	SyncedAt              time.Time `json:"synced_at"               db:"synced_at"`
+}
+
+// Immunization is the persisted representation of a FHIR R4 Immunization.
+type Immunization struct {
+	ID             string    `json:"id"              db:"id"`
+	FHIRID         string    `json:"fhir_id"         db:"fhir_id"`
+	EHRURL         string    `json:"ehr_url"         db:"ehr_url"`
+	PatientFHIRID  string    `json:"patient_fhir_id" db:"patient_fhir_id"`
+	Status         string    `json:"status"          db:"status"`
+	VaccineText    string    `json:"vaccine_text"    db:"vaccine_text"`
+	VaccineSystem  string    `json:"vaccine_system"  db:"vaccine_system"`
+	VaccineCode    string    `json:"vaccine_code"    db:"vaccine_code"`
+	OccurrenceDate string    `json:"occurrence_date" db:"occurrence_date"`
+	PrimarySource  bool      `json:"primary_source"  db:"primary_source"`
+	LotNumber      string    `json:"lot_number"      db:"lot_number"`
+	SyncedAt       time.Time `json:"synced_at"       db:"synced_at"`
+}
+
+// Procedure is the persisted representation of a FHIR R4 Procedure.
+type Procedure struct {
+	ID            string    `json:"id"              db:"id"`
+	FHIRID        string    `json:"fhir_id"         db:"fhir_id"`
+	EHRURL        string    `json:"ehr_url"         db:"ehr_url"`
+	PatientFHIRID string    `json:"patient_fhir_id" db:"patient_fhir_id"`
+	Status        string    `json:"status"          db:"status"`
+	CodeText      string    `json:"code_text"       db:"code_text"`
+	CodeSystem    string    `json:"code_system"     db:"code_system"`
+	CodeCode      string    `json:"code_code"       db:"code_code"`
+	PerformedDate string    `json:"performed_date"  db:"performed_date"`
+	ReasonText    string    `json:"reason_text"     db:"reason_text"`
+	Outcome       string    `json:"outcome"         db:"outcome"`
+	SyncedAt      time.Time `json:"synced_at"       db:"synced_at"`
+}
+
+// Encounter is the persisted representation of a FHIR R4 Encounter.
+type Encounter struct {
+	ID            string    `json:"id"              db:"id"`
+	FHIRID        string    `json:"fhir_id"         db:"fhir_id"`
+	EHRURL        string    `json:"ehr_url"         db:"ehr_url"`
+	PatientFHIRID string    `json:"patient_fhir_id" db:"patient_fhir_id"`
+	Status        string    `json:"status"          db:"status"`
+	Class         string    `json:"class"           db:"class"`
+	TypeText      string    `json:"type_text"       db:"type_text"`
+	PeriodStart   string    `json:"period_start"    db:"period_start"`
+	PeriodEnd     string    `json:"period_end"      db:"period_end"`
+	ReasonText    string    `json:"reason_text"     db:"reason_text"`
+	SyncedAt      time.Time `json:"synced_at"       db:"synced_at"`
 }
 
 // PatientSync records a completed FHIR sync event for a patient.

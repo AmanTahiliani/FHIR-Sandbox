@@ -144,14 +144,68 @@ func (h *Handler) HandleSync(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// -----------------------------------------------------------------
+	// Fetch Immunizations
+	// -----------------------------------------------------------------
+	rawImmunizations, err := client.GetImmunizations(patientID, sinceTime)
+	if err != nil {
+		log.Printf("handlers: sync GetImmunizations for Patient/%s: %v", patientID, err)
+	}
+
+	immunizationCount := 0
+	for i := range rawImmunizations {
+		m := fhir.ExtractImmunization(&rawImmunizations[i], patientID, ehrURL)
+		if _, err := h.store.UpsertImmunization(m); err != nil {
+			log.Printf("handlers: sync UpsertImmunization fhir_id=%s: %v", m.FHIRID, err)
+			continue
+		}
+		immunizationCount++
+	}
+
+	// -----------------------------------------------------------------
+	// Fetch Procedures
+	// -----------------------------------------------------------------
+	rawProcedures, err := client.GetProcedures(patientID, sinceTime)
+	if err != nil {
+		log.Printf("handlers: sync GetProcedures for Patient/%s: %v", patientID, err)
+	}
+
+	procedureCount := 0
+	for i := range rawProcedures {
+		m := fhir.ExtractProcedure(&rawProcedures[i], patientID, ehrURL)
+		if _, err := h.store.UpsertProcedure(m); err != nil {
+			log.Printf("handlers: sync UpsertProcedure fhir_id=%s: %v", m.FHIRID, err)
+			continue
+		}
+		procedureCount++
+	}
+
+	// -----------------------------------------------------------------
+	// Fetch Encounters
+	// -----------------------------------------------------------------
+	rawEncounters, err := client.GetEncounters(patientID, sinceTime)
+	if err != nil {
+		log.Printf("handlers: sync GetEncounters for Patient/%s: %v", patientID, err)
+	}
+
+	encounterCount := 0
+	for i := range rawEncounters {
+		m := fhir.ExtractEncounter(&rawEncounters[i], patientID, ehrURL)
+		if _, err := h.store.UpsertEncounter(m); err != nil {
+			log.Printf("handlers: sync UpsertEncounter fhir_id=%s: %v", m.FHIRID, err)
+			continue
+		}
+		encounterCount++
+	}
+
+	// -----------------------------------------------------------------
 	// Record the sync event
 	// -----------------------------------------------------------------
 	if _, err := h.store.RecordSync(patientID, ehrURL, obsCount, condCount, docCount); err != nil {
 		log.Printf("handlers: sync RecordSync Patient/%s: %v", patientID, err)
 	}
 
-	log.Printf("handlers: sync complete for Patient/%s — obs=%d cond=%d docs=%d med=%d allergy=%d",
-		patientID, obsCount, condCount, docCount, medCount, allergyCount)
+	log.Printf("handlers: sync complete for Patient/%s — obs=%d cond=%d docs=%d med=%d allergy=%d imm=%d proc=%d enc=%d",
+		patientID, obsCount, condCount, docCount, medCount, allergyCount, immunizationCount, procedureCount, encounterCount)
 
 	dashboardURL := "/dashboard?synced=true"
 	if overrideID := r.URL.Query().Get("patient_id"); overrideID != "" {

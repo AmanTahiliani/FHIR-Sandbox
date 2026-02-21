@@ -272,6 +272,414 @@ func TestListDocumentReferences_Empty(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// MedicationRequest tests
+// ---------------------------------------------------------------------------
+
+func TestUpsertMedicationRequest_NewAndUpdate(t *testing.T) {
+	store := newTestStore(t)
+
+	med := &models.MedicationRequest{
+		FHIRID:           "med-001",
+		EHRURL:           testEHRURL,
+		PatientFHIRID:    testPatientID,
+		Status:           "active",
+		Intent:           "order",
+		MedCodeText:      "Metformin 500mg",
+		MedCodeSystem:    "http://www.nlm.nih.gov/research/umls/rxnorm",
+		MedCodeCode:      "860975",
+		AuthoredOn:       "2024-01-10",
+		RequesterDisplay: "Dr. Smith",
+		DosageText:       "1 tablet twice daily",
+	}
+
+	id1, err := store.UpsertMedicationRequest(med)
+	if err != nil {
+		t.Fatalf("initial UpsertMedicationRequest: %v", err)
+	}
+	if id1 == "" {
+		t.Fatal("expected non-empty ID")
+	}
+
+	med.Status = "stopped"
+	id2, err := store.UpsertMedicationRequest(med)
+	if err != nil {
+		t.Fatalf("update UpsertMedicationRequest: %v", err)
+	}
+	if id1 != id2 {
+		t.Errorf("ID changed on upsert: was %q, got %q", id1, id2)
+	}
+
+	rows, err := store.ListMedicationRequests(testPatientID, testEHRURL)
+	if err != nil {
+		t.Fatalf("ListMedicationRequests: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 med, got %d", len(rows))
+	}
+	if rows[0].Status != "stopped" {
+		t.Errorf("Status: got %q, want stopped", rows[0].Status)
+	}
+}
+
+func TestListMedicationRequests_Empty(t *testing.T) {
+	store := newTestStore(t)
+	rows, err := store.ListMedicationRequests("no-such-patient", testEHRURL)
+	if err != nil {
+		t.Fatalf("ListMedicationRequests: %v", err)
+	}
+	if len(rows) != 0 {
+		t.Errorf("expected 0, got %d", len(rows))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// AllergyIntolerance tests (including reaction fields)
+// ---------------------------------------------------------------------------
+
+func TestUpsertAllergyIntolerance_WithReaction(t *testing.T) {
+	store := newTestStore(t)
+
+	allergy := &models.AllergyIntolerance{
+		FHIRID:                "allergy-001",
+		EHRURL:                testEHRURL,
+		PatientFHIRID:         testPatientID,
+		ClinicalStatus:        "active",
+		VerificationStatus:    "confirmed",
+		Type:                  "allergy",
+		Category:              "medication",
+		Criticality:           "high",
+		CodeText:              "Penicillin",
+		CodeSystem:            "http://www.nlm.nih.gov/research/umls/rxnorm",
+		CodeCode:              "7980",
+		RecordedDate:          "2018-05-01",
+		ReactionSeverity:      "severe",
+		ReactionManifestation: "Anaphylaxis",
+	}
+
+	id1, err := store.UpsertAllergyIntolerance(allergy)
+	if err != nil {
+		t.Fatalf("initial UpsertAllergyIntolerance: %v", err)
+	}
+	if id1 == "" {
+		t.Fatal("expected non-empty ID")
+	}
+
+	// Update reaction.
+	allergy.ReactionSeverity = "moderate"
+	allergy.ReactionManifestation = "Rash"
+	id2, err := store.UpsertAllergyIntolerance(allergy)
+	if err != nil {
+		t.Fatalf("update UpsertAllergyIntolerance: %v", err)
+	}
+	if id1 != id2 {
+		t.Errorf("ID changed on upsert: was %q, got %q", id1, id2)
+	}
+
+	rows, err := store.ListAllergyIntolerances(testPatientID, testEHRURL)
+	if err != nil {
+		t.Fatalf("ListAllergyIntolerances: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 allergy, got %d", len(rows))
+	}
+	got := rows[0]
+	if got.ReactionSeverity != "moderate" {
+		t.Errorf("ReactionSeverity: got %q, want moderate", got.ReactionSeverity)
+	}
+	if got.ReactionManifestation != "Rash" {
+		t.Errorf("ReactionManifestation: got %q, want Rash", got.ReactionManifestation)
+	}
+}
+
+func TestUpsertAllergyIntolerance_NoReaction(t *testing.T) {
+	store := newTestStore(t)
+
+	allergy := &models.AllergyIntolerance{
+		FHIRID:         "allergy-no-rxn",
+		EHRURL:         testEHRURL,
+		PatientFHIRID:  testPatientID,
+		ClinicalStatus: "active",
+		CodeText:       "Latex",
+	}
+	_, err := store.UpsertAllergyIntolerance(allergy)
+	if err != nil {
+		t.Fatalf("UpsertAllergyIntolerance (no reaction): %v", err)
+	}
+
+	rows, err := store.ListAllergyIntolerances(testPatientID, testEHRURL)
+	if err != nil {
+		t.Fatalf("ListAllergyIntolerances: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1, got %d", len(rows))
+	}
+	if rows[0].ReactionSeverity != "" {
+		t.Errorf("expected empty ReactionSeverity, got %q", rows[0].ReactionSeverity)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Immunization tests
+// ---------------------------------------------------------------------------
+
+func TestUpsertImmunization_NewAndUpdate(t *testing.T) {
+	store := newTestStore(t)
+
+	imm := &models.Immunization{
+		FHIRID:         "imm-001",
+		EHRURL:         testEHRURL,
+		PatientFHIRID:  testPatientID,
+		Status:         "completed",
+		VaccineText:    "Influenza, seasonal",
+		VaccineSystem:  "http://hl7.org/fhir/sid/cvx",
+		VaccineCode:    "141",
+		OccurrenceDate: "2023-10-01",
+		PrimarySource:  true,
+		LotNumber:      "LOT123",
+	}
+
+	id1, err := store.UpsertImmunization(imm)
+	if err != nil {
+		t.Fatalf("initial UpsertImmunization: %v", err)
+	}
+	if id1 == "" {
+		t.Fatal("expected non-empty ID")
+	}
+
+	imm.LotNumber = "LOT456"
+	id2, err := store.UpsertImmunization(imm)
+	if err != nil {
+		t.Fatalf("update UpsertImmunization: %v", err)
+	}
+	if id1 != id2 {
+		t.Errorf("ID changed on upsert: was %q, got %q", id1, id2)
+	}
+
+	rows, err := store.ListImmunizations(testPatientID, testEHRURL)
+	if err != nil {
+		t.Fatalf("ListImmunizations: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 immunization, got %d", len(rows))
+	}
+	if rows[0].LotNumber != "LOT456" {
+		t.Errorf("LotNumber: got %q, want LOT456", rows[0].LotNumber)
+	}
+	if !rows[0].PrimarySource {
+		t.Error("PrimarySource should be true")
+	}
+}
+
+func TestListImmunizations_Empty(t *testing.T) {
+	store := newTestStore(t)
+	rows, err := store.ListImmunizations("no-such-patient", testEHRURL)
+	if err != nil {
+		t.Fatalf("ListImmunizations: %v", err)
+	}
+	if len(rows) != 0 {
+		t.Errorf("expected 0, got %d", len(rows))
+	}
+}
+
+func TestListImmunizations_OrderedNewestFirst(t *testing.T) {
+	store := newTestStore(t)
+
+	for _, item := range []struct {
+		id   string
+		date string
+	}{
+		{"imm-a", "2022-09-01"},
+		{"imm-b", "2023-10-15"},
+		{"imm-c", "2021-03-01"},
+	} {
+		_, err := store.UpsertImmunization(&models.Immunization{
+			FHIRID:         item.id,
+			EHRURL:         testEHRURL,
+			PatientFHIRID:  testPatientID,
+			Status:         "completed",
+			OccurrenceDate: item.date,
+		})
+		if err != nil {
+			t.Fatalf("UpsertImmunization %s: %v", item.id, err)
+		}
+	}
+
+	rows, err := store.ListImmunizations(testPatientID, testEHRURL)
+	if err != nil {
+		t.Fatalf("ListImmunizations: %v", err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("expected 3, got %d", len(rows))
+	}
+	if rows[0].FHIRID != "imm-b" {
+		t.Errorf("first: got %q, want imm-b", rows[0].FHIRID)
+	}
+	if rows[2].FHIRID != "imm-c" {
+		t.Errorf("last: got %q, want imm-c", rows[2].FHIRID)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Procedure tests
+// ---------------------------------------------------------------------------
+
+func TestUpsertProcedure_NewAndUpdate(t *testing.T) {
+	store := newTestStore(t)
+
+	proc := &models.Procedure{
+		FHIRID:        "proc-001",
+		EHRURL:        testEHRURL,
+		PatientFHIRID: testPatientID,
+		Status:        "completed",
+		CodeText:      "Appendectomy",
+		CodeSystem:    "http://snomed.info/sct",
+		CodeCode:      "80146002",
+		PerformedDate: "2019-06-15",
+		ReasonText:    "Acute appendicitis",
+		Outcome:       "Successful procedure",
+	}
+
+	id1, err := store.UpsertProcedure(proc)
+	if err != nil {
+		t.Fatalf("initial UpsertProcedure: %v", err)
+	}
+	if id1 == "" {
+		t.Fatal("expected non-empty ID")
+	}
+
+	proc.Outcome = "Procedure completed without complications"
+	id2, err := store.UpsertProcedure(proc)
+	if err != nil {
+		t.Fatalf("update UpsertProcedure: %v", err)
+	}
+	if id1 != id2 {
+		t.Errorf("ID changed on upsert: was %q, got %q", id1, id2)
+	}
+
+	rows, err := store.ListProcedures(testPatientID, testEHRURL)
+	if err != nil {
+		t.Fatalf("ListProcedures: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 procedure, got %d", len(rows))
+	}
+	if rows[0].Outcome != "Procedure completed without complications" {
+		t.Errorf("Outcome: got %q", rows[0].Outcome)
+	}
+}
+
+func TestListProcedures_Empty(t *testing.T) {
+	store := newTestStore(t)
+	rows, err := store.ListProcedures("no-such-patient", testEHRURL)
+	if err != nil {
+		t.Fatalf("ListProcedures: %v", err)
+	}
+	if len(rows) != 0 {
+		t.Errorf("expected 0, got %d", len(rows))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Encounter tests
+// ---------------------------------------------------------------------------
+
+func TestUpsertEncounter_NewAndUpdate(t *testing.T) {
+	store := newTestStore(t)
+
+	enc := &models.Encounter{
+		FHIRID:        "enc-001",
+		EHRURL:        testEHRURL,
+		PatientFHIRID: testPatientID,
+		Status:        "finished",
+		Class:         "AMB",
+		TypeText:      "Office visit",
+		PeriodStart:   "2024-03-10",
+		PeriodEnd:     "2024-03-10",
+		ReasonText:    "Annual physical",
+	}
+
+	id1, err := store.UpsertEncounter(enc)
+	if err != nil {
+		t.Fatalf("initial UpsertEncounter: %v", err)
+	}
+	if id1 == "" {
+		t.Fatal("expected non-empty ID")
+	}
+
+	enc.Status = "cancelled"
+	id2, err := store.UpsertEncounter(enc)
+	if err != nil {
+		t.Fatalf("update UpsertEncounter: %v", err)
+	}
+	if id1 != id2 {
+		t.Errorf("ID changed on upsert: was %q, got %q", id1, id2)
+	}
+
+	rows, err := store.ListEncounters(testPatientID, testEHRURL)
+	if err != nil {
+		t.Fatalf("ListEncounters: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 encounter, got %d", len(rows))
+	}
+	if rows[0].Status != "cancelled" {
+		t.Errorf("Status: got %q, want cancelled", rows[0].Status)
+	}
+	if rows[0].Class != "AMB" {
+		t.Errorf("Class: got %q, want AMB", rows[0].Class)
+	}
+}
+
+func TestListEncounters_Empty(t *testing.T) {
+	store := newTestStore(t)
+	rows, err := store.ListEncounters("no-such-patient", testEHRURL)
+	if err != nil {
+		t.Fatalf("ListEncounters: %v", err)
+	}
+	if len(rows) != 0 {
+		t.Errorf("expected 0, got %d", len(rows))
+	}
+}
+
+func TestListEncounters_OrderedNewestFirst(t *testing.T) {
+	store := newTestStore(t)
+
+	for _, item := range []struct {
+		id    string
+		start string
+	}{
+		{"enc-a", "2023-01-01"},
+		{"enc-b", "2024-06-01"},
+		{"enc-c", "2022-12-01"},
+	} {
+		_, err := store.UpsertEncounter(&models.Encounter{
+			FHIRID:        item.id,
+			EHRURL:        testEHRURL,
+			PatientFHIRID: testPatientID,
+			Status:        "finished",
+			PeriodStart:   item.start,
+		})
+		if err != nil {
+			t.Fatalf("UpsertEncounter %s: %v", item.id, err)
+		}
+	}
+
+	rows, err := store.ListEncounters(testPatientID, testEHRURL)
+	if err != nil {
+		t.Fatalf("ListEncounters: %v", err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("expected 3, got %d", len(rows))
+	}
+	if rows[0].FHIRID != "enc-b" {
+		t.Errorf("first: got %q, want enc-b", rows[0].FHIRID)
+	}
+	if rows[2].FHIRID != "enc-c" {
+		t.Errorf("last: got %q, want enc-c", rows[2].FHIRID)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // PatientSync tests
 // ---------------------------------------------------------------------------
 
