@@ -495,6 +495,38 @@ func (s *Store) ListUsersByRole(role models.Role, ehrURL string) ([]models.User,
 	return users, rows.Err()
 }
 
+// ListAllPatients returns every user with role='patient' across all EHR
+// tenants. Used by the patient-match API which needs to compare against
+// the full patient population.
+func (s *Store) ListAllPatients() ([]models.User, error) {
+	rows, err := s.db.Query(`
+		SELECT id, fhir_resource_type, fhir_id, ehr_url, role,
+		       first_name, middle_name, last_name, mrn, dob, gender, email,
+		       created_at, updated_at
+		FROM users WHERE role = ?
+		ORDER BY last_name ASC, first_name ASC`,
+		string(models.RolePatient),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("db: list all patients: %w", err)
+	}
+	defer rows.Close()
+
+	var users []models.User
+	for rows.Next() {
+		var u models.User
+		if err := rows.Scan(
+			&u.ID, &u.FHIRResourceType, &u.FHIRID, &u.EHRURL, &u.Role,
+			&u.FirstName, &u.MiddleName, &u.LastName, &u.MRN, &u.DOB, &u.Gender, &u.Email,
+			&u.CreatedAt, &u.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("db: scan patient: %w", err)
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}
+
 // ---------------------------------------------------------------------------
 // Session operations
 // ---------------------------------------------------------------------------

@@ -48,6 +48,11 @@ func main() {
 			},
 			// Add additional EHR configurations here as needed.
 		},
+		PatientMatchAPIKey: "hRsMatch.Yk4mN8wQ2xR7vJ3pT5hB9fU1dA6sC0eL",
+
+		// Remote (Rimidi/Provider) patient match integration.
+		PatientMatchRemoteURL:    "http://localhost:2222/cshub/api/patient-match/",
+		PatientMatchRemoteAPIKey: "pMaTcH.XkR9wQzL5vJ3nT7hB2fY8dU4mA6sC1eP0gW",
 	}
 
 	// -------------------------------------------------------------------------
@@ -94,11 +99,18 @@ func main() {
 	mux.HandleFunc("/auth-redirect", h.HandleAuthRedirect)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("app/static"))))
 
+	// API routes — protected by API key middleware (machine-to-machine).
+	apiKeyMW := middleware.NewAPIKeyMiddleware(cfg.PatientMatchAPIKey)
+	mux.Handle("/api/patient-match", apiKeyMW.Wrap(http.HandlerFunc(h.HandlePatientMatch)))
+
 	// Session-required routes — wrapped with the hard-gate middleware.
 	mux.Handle("/dashboard", sessionMW.RequireSession(http.HandlerFunc(h.HandleDashboard)))
 	mux.Handle("/dashboard/sync", sessionMW.RequireSession(http.HandlerFunc(h.HandleSync)))
 	mux.Handle("/patients", sessionMW.RequireSession(http.HandlerFunc(h.HandlePatients)))
 	mux.Handle("/logout", sessionMW.RequireSession(http.HandlerFunc(h.HandleLogout)))
+
+	// Session-required API — "Find in Rimidi" proxy for the dashboard UI.
+	mux.Handle("/api/patient-match-proxy", sessionMW.RequireSession(http.HandlerFunc(h.HandlePatientMatchProxy)))
 
 	// Apply the soft session loader to every request so templates can always
 	// read the current user from context.

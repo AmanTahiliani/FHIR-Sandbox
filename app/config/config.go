@@ -21,6 +21,18 @@ type AppConfig struct {
 	// DBPath is the file path for the SQLite database.
 	// Use ":memory:" for in-process testing.
 	DBPath string
+
+	// PatientMatchAPIKey is the pre-shared key that external systems must
+	// provide in the X-Api-Key header when calling POST /api/patient-match.
+	PatientMatchAPIKey string
+
+	// PatientMatchRemoteURL is the URL of the remote (Rimidi/Provider) patient
+	// match API that the proxy handler calls on behalf of the logged-in user.
+	PatientMatchRemoteURL string
+
+	// PatientMatchRemoteAPIKey is the API key sent in the X-Api-Key header
+	// when calling the remote (Rimidi/Provider) patient match API.
+	PatientMatchRemoteAPIKey string
 }
 
 // ServerConfig holds HTTP server settings.
