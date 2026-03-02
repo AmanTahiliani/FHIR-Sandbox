@@ -177,6 +177,31 @@ tr:hover td { background-color: #FAFAFB; }
 }
 .tab-btn:hover { color: var(--text-main); }
 .tab-btn.active { color: var(--text-main); border-bottom-color: var(--text-main); }
+.tab-btn.cgm-tab { 
+  color: #e91e63; 
+  border-bottom: 3px solid transparent;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.tab-btn.cgm-tab:hover { 
+  color: #c2185b; 
+  border-bottom-color: rgba(233, 30, 99, 0.4);
+}
+.tab-btn.cgm-tab.active { 
+  color: #e91e63; 
+  border-bottom-color: #e91e63; 
+  font-weight: 600;
+  position: relative;
+}
+.tab-btn.cgm-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -3px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #e91e63 0%, #f06292 50%, #e91e63 100%);
+  border-radius: 2px 2px 0 0;
+}
 .tab-content { display: none; animation: fadeIn 0.3s ease; }
 .tab-content.active { display: block; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }

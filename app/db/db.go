@@ -314,6 +314,25 @@ var migrations = []migration{
 		ALTER TABLE users ADD COLUMN mrn TEXT NOT NULL DEFAULT '';
 		`,
 	},
+	{
+		version: 10,
+		sql: `
+		CREATE TABLE IF NOT EXISTS patient_matches (
+			id                 TEXT PRIMARY KEY,
+			hrs_patient_fhir_id TEXT NOT NULL,
+			hrs_ehr_url        TEXT NOT NULL,
+			rimidi_app_id      TEXT NOT NULL,
+			rimidi_patient_pk  TEXT NOT NULL,
+			rimidi_patient_ref TEXT NOT NULL,
+			confirmed_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			created_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at         DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(hrs_patient_fhir_id, hrs_ehr_url, rimidi_app_id, rimidi_patient_pk)
+		);
+
+		CREATE INDEX IF NOT EXISTS idx_patient_matches_fhir ON patient_matches(hrs_patient_fhir_id, hrs_ehr_url);
+		`,
+	},
 }
 
 // migrate applies any migrations that have not yet been run, in order.
@@ -596,4 +615,129 @@ func (s *Store) DeleteExpiredSessions() (int64, error) {
 	}
 	n, _ := res.RowsAffected()
 	return n, nil
+}
+
+// ---------------------------------------------------------------------------
+// Patient match operations
+// ---------------------------------------------------------------------------
+
+// UpsertPatientMatch inserts a new patient match or updates an existing one.
+// The natural key is (hrs_patient_fhir_id, hrs_ehr_url, rimidi_app_id, rimidi_patient_pk).
+func (s *Store) UpsertPatientMatch(match *models.PatientMatch) error {
+	now := time.Now().UTC()
+
+	// Check if match already exists
+	var existingID string
+	err := s.db.QueryRow(
+		`SELECT id FROM patient_matches 
+		 WHERE hrs_patient_fhir_id = ? AND hrs_ehr_url = ? AND rimidi_app_id = ? AND rimidi_patient_pk = ?`,
+		match.HRSPatientFHIRID, match.HRSEHRURL, match.RimidiAppID, match.RimidiPatientPK,
+	).Scan(&existingID)
+
+	if err == nil {
+		// Match exists — update it
+		_, err = s.db.Exec(`
+			UPDATE patient_matches SET
+				rimidi_patient_ref = ?,
+				confirmed_at = ?,
+				updated_at = ?
+			WHERE id = ?`,
+			match.RimidiPatientRef, now, now, existingID,
+		)
+		if err != nil {
+			return fmt.Errorf("db: update patient match %s: %w", existingID, err)
+		}
+		match.ID = existingID
+		match.ConfirmedAt = now
+		match.UpdatedAt = now
+		return nil
+	}
+
+	if err != sql.ErrNoRows {
+		return fmt.Errorf("db: lookup patient match: %w", err)
+	}
+
+	// New match — generate a fresh internal UUID
+	match.ID = uuid.NewString()
+	match.ConfirmedAt = now
+	match.CreatedAt = now
+	match.UpdatedAt = now
+
+	_, err = s.db.Exec(`
+		INSERT INTO patient_matches (
+			id, hrs_patient_fhir_id, hrs_ehr_url, rimidi_app_id,
+			rimidi_patient_pk, rimidi_patient_ref, confirmed_at, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		match.ID, match.HRSPatientFHIRID, match.HRSEHRURL, match.RimidiAppID,
+		match.RimidiPatientPK, match.RimidiPatientRef, match.ConfirmedAt, match.CreatedAt, match.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("db: insert patient match: %w", err)
+	}
+	return nil
+}
+
+// GetPatientMatchByFHIRID retrieves the most recent confirmed match for a patient
+// by their FHIR ID and EHR URL. Returns sql.ErrNoRows if no match is found.
+func (s *Store) GetPatientMatchByFHIRID(fhirID, ehrURL string) (*models.PatientMatch, error) {
+	m := &models.PatientMatch{}
+	err := s.db.QueryRow(`
+		SELECT id, hrs_patient_fhir_id, hrs_ehr_url, rimidi_app_id,
+		       rimidi_patient_pk, rimidi_patient_ref, confirmed_at, created_at, updated_at
+		FROM patient_matches
+		WHERE hrs_patient_fhir_id = ? AND hrs_ehr_url = ?
+		ORDER BY confirmed_at DESC
+		LIMIT 1`,
+		fhirID, ehrURL,
+	).Scan(
+		&m.ID, &m.HRSPatientFHIRID, &m.HRSEHRURL, &m.RimidiAppID,
+		&m.RimidiPatientPK, &m.RimidiPatientRef, &m.ConfirmedAt, &m.CreatedAt, &m.UpdatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// ListPatientMatchesByFHIRID retrieves all confirmed matches for a patient
+// by their FHIR ID and EHR URL, ordered by most recent first.
+func (s *Store) ListPatientMatchesByFHIRID(fhirID, ehrURL string) ([]models.PatientMatch, error) {
+	rows, err := s.db.Query(`
+		SELECT id, hrs_patient_fhir_id, hrs_ehr_url, rimidi_app_id,
+		       rimidi_patient_pk, rimidi_patient_ref, confirmed_at, created_at, updated_at
+		FROM patient_matches
+		WHERE hrs_patient_fhir_id = ? AND hrs_ehr_url = ?
+		ORDER BY confirmed_at DESC`,
+		fhirID, ehrURL,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("db: list patient matches: %w", err)
+	}
+	defer rows.Close()
+
+	var matches []models.PatientMatch
+	for rows.Next() {
+		var m models.PatientMatch
+		if err := rows.Scan(
+			&m.ID, &m.HRSPatientFHIRID, &m.HRSEHRURL, &m.RimidiAppID,
+			&m.RimidiPatientPK, &m.RimidiPatientRef, &m.ConfirmedAt, &m.CreatedAt, &m.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("db: scan patient match: %w", err)
+		}
+		matches = append(matches, m)
+	}
+	return matches, rows.Err()
+}
+
+// DeletePatientMatch removes the confirmed match for a patient.
+func (s *Store) DeletePatientMatch(fhirID, ehrURL string) error {
+	_, err := s.db.Exec(`
+		DELETE FROM patient_matches
+		WHERE hrs_patient_fhir_id = ? AND hrs_ehr_url = ?`,
+		fhirID, ehrURL,
+	)
+	if err != nil {
+		return fmt.Errorf("db: delete patient match: %w", err)
+	}
+	return nil
 }

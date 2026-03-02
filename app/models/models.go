@@ -258,3 +258,16 @@ type PatientSync struct {
 	CondCount     int       `json:"cond_count"      db:"cond_count"`
 	DocCount      int       `json:"doc_count"       db:"doc_count"`
 }
+
+// PatientMatch records a confirmed patient match between HRS (FHIR Sandbox) and Rimidi Provider.
+type PatientMatch struct {
+	ID               string    `json:"id"                 db:"id"`
+	HRSPatientFHIRID string    `json:"hrs_patient_fhir_id" db:"hrs_patient_fhir_id"`
+	HRSEHRURL        string    `json:"hrs_ehr_url"        db:"hrs_ehr_url"`
+	RimidiAppID      string    `json:"rimidi_app_id"      db:"rimidi_app_id"`
+	RimidiPatientPK  string    `json:"rimidi_patient_pk"  db:"rimidi_patient_pk"`
+	RimidiPatientRef string    `json:"rimidi_patient_ref" db:"rimidi_patient_ref"`
+	ConfirmedAt      time.Time `json:"confirmed_at"       db:"confirmed_at"`
+	CreatedAt        time.Time `json:"created_at"         db:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"         db:"updated_at"`
+}

@@ -53,6 +53,13 @@ func main() {
 		// Remote (Rimidi/Provider) patient match integration.
 		PatientMatchRemoteURL:    "http://localhost:2222/cshub/api/patient-match/",
 		PatientMatchRemoteAPIKey: "pMaTcH.XkR9wQzL5vJ3nT7hB2fY8dU4mA6sC1eP0gW",
+
+		// Rimidi app identifier for patient matches.
+		RimidiAppID: "demo-app",
+
+		// Rimidi CGM API integration.
+		RimidiCGMAPIURL:    "http://localhost:2222/cshub/privateadmin/patients",
+		RimidiInternalAPIKey: "PYRXAcHV.ltOJRxYjoSrBNKXZNhu5fWalWXJesvbx",
 	}
 
 	// -------------------------------------------------------------------------
@@ -111,6 +118,16 @@ func main() {
 
 	// Session-required API — "Find in Rimidi" proxy for the dashboard UI.
 	mux.Handle("/api/patient-match-proxy", sessionMW.RequireSession(http.HandlerFunc(h.HandlePatientMatchProxy)))
+
+	// Session-required API — Patient match confirmation.
+	mux.Handle("/api/patient-match/confirm", sessionMW.RequireSession(http.HandlerFunc(h.HandleConfirmMatch)))
+
+	// Session-required API — Patient match unlink.
+	mux.Handle("/api/patient-match/unlink", sessionMW.RequireSession(http.HandlerFunc(h.HandleUnlinkMatch)))
+
+	// Session-required API — CGM preview proxy.
+	mux.Handle("/api/cgm-preview", sessionMW.RequireSession(http.HandlerFunc(h.HandleCGMPreview)))
+	mux.Handle("/api/cgm-report-proxy", sessionMW.RequireSession(http.HandlerFunc(h.HandleCGMReportProxy)))
 
 	// Apply the soft session loader to every request so templates can always
 	// read the current user from context.

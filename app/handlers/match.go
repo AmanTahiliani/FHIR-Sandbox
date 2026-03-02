@@ -13,8 +13,11 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/AmanTahiliani/FHIR-Sandbox/app/middleware"
 	"github.com/AmanTahiliani/FHIR-Sandbox/app/models"
+	"github.com/google/uuid"
 )
 
 // patientMatchRequest is the inbound JSON shape for a match query.
@@ -197,6 +200,147 @@ func (h *Handler) HandlePatientMatch(w http.ResponseWriter, r *http.Request) {
 	// Ensure matches is never null in JSON
 	if resp.Matches == nil {
 		resp.Matches = []matchResult{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(resp)
+}
+
+// confirmMatchRequest is the inbound JSON shape for a match confirmation.
+type confirmMatchRequest struct {
+	RimidiPatientRef string `json:"rimidi_patient_ref"`
+	RimidiPatientPK  string `json:"rimidi_patient_pk"`
+}
+
+// confirmMatchResponse is the response shape for match confirmation.
+type confirmMatchResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Match   *models.PatientMatch `json:"match,omitempty"`
+}
+
+// HandleConfirmMatch processes POST /api/patient-match/confirm requests.
+// It requires a valid session and stores the confirmed match in the database.
+func (h *Handler) HandleConfirmMatch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	sess := middleware.SessionFromContext(r.Context())
+	if sess == nil {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	// ── Resolve patient from the session or query param ─────────────
+	patientFHIRID := sess.PatientFHIRID
+	if override := r.URL.Query().Get("patient_id"); override != "" {
+		patientFHIRID = override
+	}
+
+	if patientFHIRID == "" {
+		http.Error(w, `{"error":"no patient in context"}`, http.StatusBadRequest)
+		return
+	}
+
+	// ── Decode request body ─────────────────────────────────────────
+	var req confirmMatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid JSON body"}`, http.StatusBadRequest)
+		return
+	}
+
+	// ── Validate required fields ────────────────────────────────────
+	if strings.TrimSpace(req.RimidiPatientRef) == "" {
+		http.Error(w, `{"error":"rimidi_patient_ref is required"}`, http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(req.RimidiPatientPK) == "" {
+		http.Error(w, `{"error":"rimidi_patient_pk is required"}`, http.StatusBadRequest)
+		return
+	}
+
+	// ── Get Rimidi app ID from config ──────────────────────────────
+	rimidiAppID := h.cfg.RimidiAppID
+	if rimidiAppID == "" {
+		rimidiAppID = "demo-app" // Default for demo
+	}
+
+	// ── Create patient match record ─────────────────────────────────
+	match := &models.PatientMatch{
+		ID:               uuid.NewString(),
+		HRSPatientFHIRID: patientFHIRID,
+		HRSEHRURL:        sess.EHRURL,
+		RimidiAppID:      rimidiAppID,
+		RimidiPatientPK:  req.RimidiPatientPK,
+		RimidiPatientRef: req.RimidiPatientRef,
+		ConfirmedAt:      time.Now().UTC(),
+		CreatedAt:        time.Now().UTC(),
+		UpdatedAt:        time.Now().UTC(),
+	}
+
+	// ── Store match in database ────────────────────────────────────
+	if err := h.store.UpsertPatientMatch(match); err != nil {
+		log.Printf("handlers: confirm-match UpsertPatientMatch failed: %v", err)
+		http.Error(w, `{"error":"failed to store match"}`, http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("handlers: confirmed patient match: hrs_patient=%s rimidi_pk=%s", patientFHIRID, req.RimidiPatientPK)
+
+	// ── Write success response ─────────────────────────────────────
+	resp := confirmMatchResponse{
+		Success: true,
+		Message: "Patient match confirmed successfully",
+		Match:   match,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(resp)
+}
+
+// HandleUnlinkMatch processes DELETE /api/patient-match/unlink requests.
+// It requires a valid session and removes the confirmed match for the patient.
+func (h *Handler) HandleUnlinkMatch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete && r.Method != http.MethodPost {
+		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	sess := middleware.SessionFromContext(r.Context())
+	if sess == nil {
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	// ── Resolve patient from query param or session ────────────────
+	patientFHIRID := r.URL.Query().Get("patient_id")
+	if patientFHIRID == "" {
+		patientFHIRID = sess.PatientFHIRID
+	}
+
+	if patientFHIRID == "" {
+		http.Error(w, `{"error":"no patient in context"}`, http.StatusBadRequest)
+		return
+	}
+
+	// ── Delete the match ──────────────────────────────────────────
+	err := h.store.DeletePatientMatch(patientFHIRID, sess.EHRURL)
+	if err != nil {
+		log.Printf("handlers: unlink-match DeletePatientMatch(%s, %s): %v", patientFHIRID, sess.EHRURL, err)
+		http.Error(w, `{"error":"failed to unlink patient"}`, http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("handlers: unlinked patient match: hrs_patient=%s", patientFHIRID)
+
+	// ── Write success response ─────────────────────────────────────
+	resp := map[string]interface{}{
+		"success": true,
+		"message": "Patient unlinked successfully",
 	}
 
 	w.Header().Set("Content-Type", "application/json")

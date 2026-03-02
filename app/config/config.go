@@ -33,6 +33,18 @@ type AppConfig struct {
 	// PatientMatchRemoteAPIKey is the API key sent in the X-Api-Key header
 	// when calling the remote (Rimidi/Provider) patient match API.
 	PatientMatchRemoteAPIKey string
+
+	// RimidiAppID is the identifier for the Rimidi app instance.
+	// Used when storing confirmed patient matches.
+	RimidiAppID string
+
+	// RimidiCGMAPIURL is the base URL for the Rimidi CGM preview API.
+	// e.g., "http://localhost:2222/cshub/privateadmin/patients"
+	RimidiCGMAPIURL string
+
+	// RimidiInternalAPIKey is the API key used to authenticate with the Rimidi
+	// CGM API (INTERNAL_APP_SYNC_KEY from Provider settings).
+	RimidiInternalAPIKey string
 }
 
 // ServerConfig holds HTTP server settings.

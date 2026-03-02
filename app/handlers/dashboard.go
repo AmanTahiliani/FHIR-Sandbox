@@ -1,8 +1,11 @@
 package handlers
 
 import (
+	"encoding/json"
+	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/AmanTahiliani/FHIR-Sandbox/app/fhir"
@@ -151,6 +154,16 @@ func (h *Handler) HandleDashboard(w http.ResponseWriter, r *http.Request) {
 	summary := buildClinicalSummary(observations, conditions, medications)
 	synced := r.URL.Query().Get("synced") == "true"
 
+	// ── Check for confirmed Rimidi patient match ────────────────────
+	var rimidiMatch *models.PatientMatch
+	var rimidiPatientKey string
+	match, err := h.store.GetPatientMatchByFHIRID(patientID, ehrURL)
+	if err == nil {
+		rimidiMatch = match
+		// Fetch the signed patient key from Rimidi
+		rimidiPatientKey = h.fetchRimidiPatientKey(match.RimidiPatientPK)
+	}
+
 	h.render(w, "dashboard.html", dashboardData{
 		Patient:            patientUser,
 		Practitioner:       practitionerUser,
@@ -167,6 +180,8 @@ func (h *Handler) HandleDashboard(w http.ResponseWriter, r *http.Request) {
 		LatestSync:         latestSync,
 		Session:            sess,
 		Synced:             synced,
+		RimidiMatch:        rimidiMatch,
+		RimidiPatientKey:   rimidiPatientKey,
 	})
 }
 
@@ -187,6 +202,75 @@ type dashboardData struct {
 	LatestSync         *models.PatientSync
 	Session            *models.Session
 	Synced             bool
+	RimidiMatch        *models.PatientMatch
+	RimidiPatientKey   string
+}
+
+// fetchRimidiPatientKey fetches the signed patient key from Rimidi Provider API.
+// Returns empty string if the fetch fails (non-blocking).
+func (h *Handler) fetchRimidiPatientKey(patientPK string) string {
+	if patientPK == "" {
+		return ""
+	}
+
+	// Build the Rimidi patient key API URL
+	// PatientMatchRemoteURL is like "http://localhost:2222/cshub/api/patient-match/"
+	rimidiBaseURL := h.cfg.PatientMatchRemoteURL
+	if rimidiBaseURL == "" {
+		return ""
+	}
+	
+	// Replace "/api/patient-match/" with "/api/patient-key/{pk}/"
+	keyURL := strings.Replace(rimidiBaseURL, "/api/patient-match/", "/api/patient-key/"+patientPK+"/", 1)
+	log.Printf("handlers: fetchRimidiPatientKey constructing URL: %s (from base: %s)", keyURL, rimidiBaseURL)
+
+	// Call Rimidi API to get signed patient key
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequest(http.MethodGet, keyURL, nil)
+	if err != nil {
+		log.Printf("handlers: fetchRimidiPatientKey new request: %v", err)
+		return ""
+	}
+	// Use internal API key (same as CGM API) for consistency
+	req.Header.Set("X-Api-Key", h.cfg.RimidiInternalAPIKey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("handlers: fetchRimidiPatientKey remote call failed: %v", err)
+		return ""
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("handlers: fetchRimidiPatientKey read response: %v", err)
+		return ""
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		bodyPreview := ""
+		if len(body) > 0 {
+			if len(body) > 200 {
+				bodyPreview = string(body[:200])
+			} else {
+				bodyPreview = string(body)
+			}
+		}
+		log.Printf("handlers: fetchRimidiPatientKey remote returned %d for URL %s, body: %s", resp.StatusCode, keyURL, bodyPreview)
+		return ""
+	}
+
+	var keyData map[string]interface{}
+	if err := json.Unmarshal(body, &keyData); err != nil {
+		log.Printf("handlers: fetchRimidiPatientKey unmarshal response: %v", err)
+		return ""
+	}
+
+	if patientKey, ok := keyData["patient_key"].(string); ok {
+		return patientKey
+	}
+
+	return ""
 }
 
 // handleUnauthorized redirects to root for dashboard requests.
